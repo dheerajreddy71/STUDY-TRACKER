@@ -5,6 +5,10 @@ import "./globals.css"
 
 import { ThemeProvider } from "@/components/theme-provider"
 
+// Force dynamic rendering for all pages to prevent SSR context errors
+export const dynamic = 'force-dynamic'
+export const revalidate = 0
+
 import { Geist, Geist_Mono, Geist as V0_Font_Geist, Geist_Mono as V0_Font_Geist_Mono, Source_Serif_4 as V0_Font_Source_Serif_4 } from 'next/font/google'
 
 // Initialize fonts
