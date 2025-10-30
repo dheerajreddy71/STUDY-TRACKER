@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { useRouter } from "next/navigation"
 import Link from "next/link"
 import { Button } from "@/components/ui/button"
@@ -15,6 +15,7 @@ export default function RegisterPage() {
   const router = useRouter()
   const [isLoading, setIsLoading] = useState(false)
   const [error, setError] = useState("")
+  const [isMounted, setIsMounted] = useState(false)
   const [formData, setFormData] = useState({
     name: "",
     email: "",
@@ -70,6 +71,14 @@ export default function RegisterPage() {
     } finally {
       setIsLoading(false)
     }
+  }
+
+  useEffect(() => {
+    setIsMounted(true)
+  }, [])
+
+  if (!isMounted) {
+    return null
   }
 
   return (
