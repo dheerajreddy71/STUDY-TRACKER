@@ -8,21 +8,6 @@ import "./globals.css"
 export const dynamic = 'force-dynamic'
 export const revalidate = 0
 
-import { Geist, Geist_Mono } from 'next/font/google'
-
-// Initialize fonts with simpler configuration
-const geist = Geist({ 
-  subsets: ["latin"],
-  display: 'swap',
-  variable: '--font-geist'
-})
-
-const geistMono = Geist_Mono({ 
-  subsets: ["latin"],
-  display: 'swap',
-  variable: '--font-geist-mono'
-})
-
 export const metadata: Metadata = {
   title: "Smart Study Habit Tracker",
   description: "Track your study sessions, analyze learning patterns, and optimize your study habits",
@@ -34,8 +19,8 @@ export default function RootLayout({
   children: React.ReactNode
 }>) {
   return (
-    <html lang="en" suppressHydrationWarning className={`${geist.variable} ${geistMono.variable}`}>
-      <body className={`font-sans antialiased`}>
+    <html lang="en" suppressHydrationWarning>
+      <body className="font-sans antialiased">
         <ClientProviders>
           {children}
         </ClientProviders>
@@ -44,3 +29,4 @@ export default function RootLayout({
     </html>
   )
 }
+
