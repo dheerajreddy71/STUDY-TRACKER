@@ -1,6 +1,5 @@
 import type React from "react"
 import type { Metadata } from "next"
-import { Analytics } from "@vercel/analytics/next"
 import { ClientProviders } from "@/components/client-providers"
 import "./globals.css"
 
@@ -24,7 +23,6 @@ export default function RootLayout({
         <ClientProviders>
           {children}
         </ClientProviders>
-        <Analytics />
       </body>
     </html>
   )
