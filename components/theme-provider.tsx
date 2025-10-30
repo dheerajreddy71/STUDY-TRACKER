@@ -1,22 +1,15 @@
 'use client'
 
 import * as React from 'react'
-import {
-  ThemeProvider as NextThemesProvider,
-  type ThemeProviderProps,
-} from 'next-themes'
+import dynamic from 'next/dynamic'
+import type { ThemeProviderProps } from 'next-themes'
+
+// Dynamically import NextThemesProvider with SSR disabled
+const NextThemesProvider = dynamic(
+  () => import('next-themes').then((mod) => mod.ThemeProvider),
+  { ssr: false }
+)
 
 export function ThemeProvider({ children, ...props }: ThemeProviderProps) {
-  const [mounted, setMounted] = React.useState(false)
-
-  React.useEffect(() => {
-    setMounted(true)
-  }, [])
-
-  // During SSR or before mount, render children without ThemeProvider
-  if (!mounted) {
-    return <>{children}</>
-  }
-
   return <NextThemesProvider {...props}>{children}</NextThemesProvider>
 }
