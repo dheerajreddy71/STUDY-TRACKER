@@ -78,20 +78,7 @@ export default function RegisterPage() {
   }, [])
 
   if (!isMounted) {
-    return (
-      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-blue-50 to-indigo-100 dark:from-gray-900 dark:to-gray-800 p-4">
-        <Card className="w-full max-w-2xl">
-          <CardHeader className="space-y-1 text-center">
-            <div className="flex justify-center mb-4">
-              <div className="p-3 bg-primary/10 rounded-full">
-                <BookOpen className="w-8 h-8 text-primary" />
-              </div>
-            </div>
-            <CardTitle className="text-2xl font-bold">Loading...</CardTitle>
-          </CardHeader>
-        </Card>
-      </div>
-    )
+    return <div style={{ minHeight: '100vh' }} />
   }
 
   return (
