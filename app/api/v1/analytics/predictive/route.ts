@@ -14,13 +14,13 @@ export async function GET(request: NextRequest) {
     // Predict performance trend
     const recentPerformance = performance.slice(0, 10)
     const performanceValues = recentPerformance.map((p: any) => p.percentage)
-    const avgPerformance = performanceValues.reduce((a, b) => a + b, 0) / performanceValues.length || 0
+    const avgPerformance = performanceValues.reduce((a: number, b: number) => a + b, 0) / performanceValues.length || 0
 
     // Calculate trend
     let trend = "stable"
     if (performanceValues.length >= 2) {
-      const recent = performanceValues.slice(0, 5).reduce((a, b) => a + b, 0) / 5
-      const older = performanceValues.slice(5, 10).reduce((a, b) => a + b, 0) / 5
+      const recent = performanceValues.slice(0, 5).reduce((a: number, b: number) => a + b, 0) / 5
+      const older = performanceValues.slice(5, 10).reduce((a: number, b: number) => a + b, 0) / 5
       if (recent > older + 5) trend = "improving"
       else if (recent < older - 5) trend = "declining"
     }

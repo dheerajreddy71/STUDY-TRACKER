@@ -5,12 +5,14 @@
 Your `.env.local` file has been created with the following variables:
 
 ### Required Variables:
+
 - ✅ `NEXT_PUBLIC_SUPABASE_URL` - Your Supabase project URL
 - ✅ `NEXT_PUBLIC_SUPABASE_ANON_KEY` - Public anon key for client-side
 - ✅ `SUPABASE_SERVICE_ROLE_KEY` - Service role key (server-side only, never expose to client)
 - ⚠️ `DATABASE_URL` - **You need to add your database password**
 
 ### To Get Your Database Password:
+
 1. Go to Supabase Dashboard: https://supabase.com/dashboard/project/oxctqjbfihdvqyuvbtno
 2. Navigate to: **Settings** > **Database**
 3. Under **Connection String**, select **URI**
@@ -21,6 +23,7 @@ Your `.env.local` file has been created with the following variables:
    ```
 
 ### Important Security Notes:
+
 - ✅ `.env.local` is in `.gitignore` - never commit it to Git
 - ✅ Use `.env.example` as a template for team members
 - ⚠️ Service role key has admin access - keep it secure
@@ -28,6 +31,7 @@ Your `.env.local` file has been created with the following variables:
 ## 2. Install Supabase Package
 
 Run this command:
+
 ```bash
 pnpm add @supabase/supabase-js
 ```
@@ -68,70 +72,76 @@ After schema is created, run:
 ```
 
 This creates:
+
 - Demo user
 - 5 sample subjects (Math, Physics, Computer Science, English, History)
 
 ## 5. Usage in Your Code
 
 ### Client-Side (React Components)
+
 ```typescript
-import { supabase } from '@/lib/supabase'
+import { supabase } from "@/lib/supabase";
 
 // Fetch data
 const { data, error } = await supabase
-  .from('subjects')
-  .select('*')
-  .eq('user_id', userId)
+  .from("subjects")
+  .select("*")
+  .eq("user_id", userId);
 
 // Insert data
-const { data, error } = await supabase
-  .from('study_sessions')
-  .insert({
-    subject_id: 'subject-id',
-    start_time: new Date().toISOString(),
-    duration: 3600,
-  })
+const { data, error } = await supabase.from("study_sessions").insert({
+  subject_id: "subject-id",
+  start_time: new Date().toISOString(),
+  duration: 3600,
+});
 
 // Real-time subscriptions
 supabase
-  .channel('sessions')
-  .on('postgres_changes', 
-    { event: 'INSERT', schema: 'public', table: 'study_sessions' },
-    (payload) => console.log('New session:', payload)
+  .channel("sessions")
+  .on(
+    "postgres_changes",
+    { event: "INSERT", schema: "public", table: "study_sessions" },
+    (payload) => console.log("New session:", payload)
   )
-  .subscribe()
+  .subscribe();
 ```
 
 ### Server-Side (API Routes)
+
 ```typescript
-import { supabaseAdmin } from '@/lib/supabase'
+import { supabaseAdmin } from "@/lib/supabase";
 
 // Use admin client for privileged operations
 const { data, error } = await supabaseAdmin
-  .from('users')
+  .from("users")
   .update({ is_active: true })
-  .eq('id', userId)
+  .eq("id", userId);
 ```
 
 ## 6. Additional Environment Variables You May Need
 
 ### For Authentication (if using Supabase Auth)
+
 ```env
 NEXT_PUBLIC_SUPABASE_AUTH_REDIRECT_URL=http://localhost:3000/auth/callback
 ```
 
 ### For Storage (file uploads)
+
 ```env
 NEXT_PUBLIC_SUPABASE_STORAGE_BUCKET=study-resources
 ```
 
 ### For Production
+
 ```env
 NEXT_PUBLIC_APP_URL=https://yourdomain.com
 NODE_ENV=production
 ```
 
 ### For Security
+
 ```env
 JWT_SECRET=your_random_32_character_string_here
 SESSION_SECRET=another_random_32_character_string
@@ -142,22 +152,24 @@ SESSION_SECRET=another_random_32_character_string
 Your app currently uses SQLite. To use Supabase PostgreSQL:
 
 ### Option A: Keep SQLite for Development, Use Supabase for Production
+
 ```typescript
 // lib/db.ts
-const isProduction = process.env.NODE_ENV === 'production'
+const isProduction = process.env.NODE_ENV === "production";
 
 if (isProduction) {
   // Use Supabase
-  const { supabase } = require('./supabase')
+  const { supabase } = require("./supabase");
   // ... implement Supabase queries
 } else {
   // Use SQLite for local dev
-  const db = new Database(dbPath)
+  const db = new Database(dbPath);
   // ... existing SQLite code
 }
 ```
 
 ### Option B: Migrate Fully to Supabase
+
 Replace `lib/db.ts` with Supabase client queries throughout the app.
 
 ## 8. Migration Checklist
@@ -176,7 +188,9 @@ Replace `lib/db.ts` with Supabase client queries throughout the app.
 ## 9. Supabase Features You Can Use
 
 ### Row Level Security (RLS)
+
 Protect data at the database level:
+
 ```sql
 -- Enable RLS
 ALTER TABLE users ENABLE ROW LEVEL SECURITY;
@@ -188,50 +202,57 @@ CREATE POLICY "Users can view own data"
 ```
 
 ### Real-time Subscriptions
+
 ```typescript
 const channel = supabase
-  .channel('study-sessions')
-  .on('postgres_changes', {
-    event: '*',
-    schema: 'public',
-    table: 'study_sessions'
-  }, (payload) => {
-    console.log('Change detected:', payload)
-  })
-  .subscribe()
+  .channel("study-sessions")
+  .on(
+    "postgres_changes",
+    {
+      event: "*",
+      schema: "public",
+      table: "study_sessions",
+    },
+    (payload) => {
+      console.log("Change detected:", payload);
+    }
+  )
+  .subscribe();
 ```
 
 ### Storage (File Uploads)
+
 ```typescript
 // Upload a file
-const { data, error } = await supabase
-  .storage
-  .from('study-resources')
-  .upload('path/to/file.pdf', file)
+const { data, error } = await supabase.storage
+  .from("study-resources")
+  .upload("path/to/file.pdf", file);
 
 // Get public URL
-const { data } = supabase
-  .storage
-  .from('study-resources')
-  .getPublicUrl('path/to/file.pdf')
+const { data } = supabase.storage
+  .from("study-resources")
+  .getPublicUrl("path/to/file.pdf");
 ```
 
 ### Authentication (Optional)
+
 ```typescript
 // Sign up
 const { data, error } = await supabase.auth.signUp({
-  email: 'user@example.com',
-  password: 'password123'
-})
+  email: "user@example.com",
+  password: "password123",
+});
 
 // Sign in
 const { data, error } = await supabase.auth.signInWithPassword({
-  email: 'user@example.com',
-  password: 'password123'
-})
+  email: "user@example.com",
+  password: "password123",
+});
 
 // Get session
-const { data: { session } } = await supabase.auth.getSession()
+const {
+  data: { session },
+} = await supabase.auth.getSession();
 ```
 
 ## 10. Testing Connection
@@ -239,29 +260,33 @@ const { data: { session } } = await supabase.auth.getSession()
 Create a test API route:
 
 **`app/api/test-supabase/route.ts`**
+
 ```typescript
-import { supabase } from '@/lib/supabase'
-import { NextResponse } from 'next/server'
+import { supabase } from "@/lib/supabase";
+import { NextResponse } from "next/server";
 
 export async function GET() {
   try {
     const { data, error } = await supabase
-      .from('users')
-      .select('count')
-      .limit(1)
-    
-    if (error) throw error
-    
-    return NextResponse.json({ 
-      success: true, 
-      message: 'Supabase connected successfully!',
-      data 
-    })
+      .from("users")
+      .select("count")
+      .limit(1);
+
+    if (error) throw error;
+
+    return NextResponse.json({
+      success: true,
+      message: "Supabase connected successfully!",
+      data,
+    });
   } catch (error: any) {
-    return NextResponse.json({ 
-      success: false, 
-      error: error.message 
-    }, { status: 500 })
+    return NextResponse.json(
+      {
+        success: false,
+        error: error.message,
+      },
+      { status: 500 }
+    );
   }
 }
 ```
@@ -286,6 +311,7 @@ Test by visiting: `http://localhost:3000/api/test-supabase`
 ---
 
 **Next Steps:**
+
 1. Run `pnpm add @supabase/supabase-js`
 2. Get your database password from Supabase Dashboard
 3. Update `DATABASE_URL` in `.env.local`

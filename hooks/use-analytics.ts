@@ -2,9 +2,12 @@ import useSWR from "swr"
 import { api } from "@/lib/api-client"
 import type { DashboardStats } from "@/lib/types"
 
+const fetcher = (url: string) => fetch(url).then((res) => res.json())
+
 export function useAnalytics() {
-  const { data, error, isLoading, mutate } = useSWR<{ stats: DashboardStats }>("/api/v1/analytics/dashboard", () =>
-    api.getDashboardStats(),
+  const { data, error, isLoading, mutate } = useSWR<{ stats: DashboardStats }>(
+    "/api/v1/analytics/dashboard",
+    fetcher,
   )
 
   return {

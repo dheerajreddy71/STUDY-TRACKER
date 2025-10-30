@@ -25,9 +25,9 @@ export async function GET(request: NextRequest) {
 
     const methodCorrelations = Object.entries(methodPerformance).map(([method, scores]) => ({
       method,
-      averagePerformance: Math.round((scores.reduce((a, b) => a + b, 0) / scores.length) * 10) / 10,
+      averagePerformance: Math.round((scores.reduce((a: number, b: number) => a + b, 0) / scores.length) * 10) / 10,
       sessionCount: scores.length,
-      effectiveness: scores.reduce((a, b) => a + b, 0) / scores.length > 75 ? "high" : "medium",
+      effectiveness: scores.reduce((a: number, b: number) => a + b, 0) / scores.length > 75 ? "high" : "medium",
     }))
 
     // Correlate study time with performance
@@ -45,7 +45,7 @@ export async function GET(request: NextRequest) {
 
     const timeCorrelations = Object.entries(timePerformance).map(([hour, scores]) => ({
       hour: Number.parseInt(hour),
-      averagePerformance: Math.round((scores.reduce((a, b) => a + b, 0) / scores.length) * 10) / 10,
+      averagePerformance: Math.round((scores.reduce((a: number, b: number) => a + b, 0) / scores.length) * 10) / 10,
       sessionCount: scores.length,
     }))
 
