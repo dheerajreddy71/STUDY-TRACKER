@@ -60,17 +60,17 @@ async function checkDataAvailability(userId: string): Promise<{
   subjects: number
   goals: number
 }> {
-  const { default: Database } = await import('better-sqlite3')
-  const path = await import('path')
-  const dbPath = path.default.join(process.cwd(), 'data', 'study-tracker.db')
-  const db = new Database(dbPath)
+  // Using Supabase PostgreSQL
+  // Path not needed for Supabase
+  // Database path not needed
+  const { db } = await import("@/lib/db-supabase")
   
-  const sessions = db.prepare('SELECT COUNT(*) as count FROM study_sessions WHERE user_id = ?').get(userId) as { count: number }
-  const performances = db.prepare('SELECT COUNT(*) as count FROM performance_entries WHERE user_id = ?').get(userId) as { count: number }
-  const subjects = db.prepare('SELECT COUNT(*) as count FROM subjects WHERE user_id = ? AND is_active = 1').get(userId) as { count: number }
-  const goals = db.prepare('SELECT COUNT(*) as count FROM goals WHERE user_id = ? AND status IN (\'active\', \'paused\')').get(userId) as { count: number }
+  const sessions = await db.prepare('SELECT COUNT(*) as count FROM study_sessions WHERE user_id = ?').get(userId) as { count: number }
+  const performances = await db.prepare('SELECT COUNT(*) as count FROM performance_entries WHERE user_id = ?').get(userId) as { count: number }
+  const subjects = await db.prepare('SELECT COUNT(*) as count FROM subjects WHERE user_id = ? AND is_active = 1').get(userId) as { count: number }
+  const goals = await db.prepare('SELECT COUNT(*) as count FROM goals WHERE user_id = ? AND status IN (\'active\', \'paused\')').get(userId) as { count: number }
   
-  db.close()
+  // No need to close Supabase connection
   
   return {
     sessions: sessions.count,
@@ -84,12 +84,12 @@ async function checkDataAvailability(userId: string): Promise<{
  * Analyze subject insights with comprehensive metrics
  */
 async function analyzeSubjectInsights(userId: string): Promise<{subjects: any[]} | null> {
-  const { default: Database } = await import('better-sqlite3')
-  const path = await import('path')
-  const dbPath = path.default.join(process.cwd(), 'data', 'study-tracker.db')
-  const db = new Database(dbPath)
+  // Using Supabase PostgreSQL
+  // Path not needed for Supabase
+  // Database path not needed
+  const { db } = await import("@/lib/db-supabase")
   
-  const subjects = db.prepare(`
+  const subjects = await db.prepare(`
     SELECT 
       s.id,
       s.name,
@@ -118,7 +118,7 @@ async function analyzeSubjectInsights(userId: string): Promise<{subjects: any[]}
     ORDER BY session_count DESC
   `).all(userId, userId, userId) as any[]
   
-  db.close()
+  // No need to close Supabase connection
   
   if (subjects.length === 0) return null
   
@@ -129,12 +129,12 @@ async function analyzeSubjectInsights(userId: string): Promise<{subjects: any[]}
  * Analyze goal progress
  */
 async function analyzeGoalProgress(userId: string): Promise<{goals: any[]} | null> {
-  const { default: Database } = await import('better-sqlite3')
-  const path = await import('path')
-  const dbPath = path.default.join(process.cwd(), 'data', 'study-tracker.db')
-  const db = new Database(dbPath)
+  // Using Supabase PostgreSQL
+  // Path not needed for Supabase
+  // Database path not needed
+  const { db } = await import("@/lib/db-supabase")
   
-  const goals = db.prepare(`
+  const goals = await db.prepare(`
     SELECT 
       id,
       goal_type,
@@ -157,7 +157,7 @@ async function analyzeGoalProgress(userId: string): Promise<{goals: any[]} | nul
       target_completion_date ASC
   `).all(userId) as any[]
   
-  db.close()
+  // No need to close Supabase connection
   
   if (goals.length === 0) return null
   
@@ -168,12 +168,12 @@ async function analyzeGoalProgress(userId: string): Promise<{goals: any[]} | nul
  * Analyze session patterns
  */
 async function analyzeSessionPatterns(userId: string): Promise<any> {
-  const { default: Database } = await import('better-sqlite3')
-  const path = await import('path')
-  const dbPath = path.default.join(process.cwd(), 'data', 'study-tracker.db')
-  const db = new Database(dbPath)
+  // Using Supabase PostgreSQL
+  // Path not needed for Supabase
+  // Database path not needed
+  const { db } = await import("@/lib/db-supabase")
   
-  const patterns = db.prepare(`
+  const patterns = await db.prepare(`
     SELECT 
       strftime('%H', started_at) as hour_of_day,
       AVG(average_focus_score) as avg_focus,
@@ -186,7 +186,7 @@ async function analyzeSessionPatterns(userId: string): Promise<any> {
     LIMIT 5
   `).all(userId) as any[]
   
-  db.close()
+  // No need to close Supabase connection
   
   if (patterns.length === 0) return null
   
@@ -238,6 +238,8 @@ function generateSubjectBasedRecommendations(userId: string, insights: {subjects
   
   lowActivitySubjects.forEach(subject => {
     const hoursStudied = (subject.total_minutes || 0) / 60
+    const avgFocus = subject.avg_focus ?? 0
+    
     recommendations.push({
       id: generateId(),
       userId,
@@ -252,15 +254,15 @@ function generateSubjectBasedRecommendations(userId: string, insights: {subjects
         `Target minimum 5-6 hours total study time per week`,
         'Create a recurring calendar block for this subject',
         'Review what you covered in previous sessions before starting new material',
-        subject.avg_focus && subject.avg_focus < 7 
-          ? `Current focus is ${subject.avg_focus.toFixed(1)}/10 - try shorter 30-min sessions` 
+        avgFocus > 0 && avgFocus < 7 
+          ? `Current focus is ${avgFocus.toFixed(1)}/10 - try shorter 30-min sessions` 
           : 'Maintain your current focus level'
       ],
       confidence: 85,
       evidence: [
         `Only ${subject.session_count} sessions completed`,
         `Total time: ${hoursStudied.toFixed(1)} hours`,
-        subject.avg_focus ? `Average focus: ${subject.avg_focus.toFixed(1)}/10` : '',
+        avgFocus > 0 ? `Average focus: ${avgFocus.toFixed(1)}/10` : '',
         subject.last_session_date ? `Last studied: ${new Date(subject.last_session_date).toLocaleDateString()}` : ''
       ].filter(Boolean),
       tags: ['high-priority', 'low-activity', subject.name.toLowerCase()],
@@ -275,17 +277,22 @@ function generateSubjectBasedRecommendations(userId: string, insights: {subjects
   console.log('Low focus subjects (<7 focus, >=2 sessions):', lowFocusSubjects.length, lowFocusSubjects.map(s => `${s.name}:${s.avg_focus}`))
   
   lowFocusSubjects.forEach(subject => {
-    const focusRange = subject.max_focus && subject.min_focus 
-      ? `(ranging ${subject.min_focus.toFixed(1)} to ${subject.max_focus.toFixed(1)})` 
+    const avgFocus = subject.avg_focus ?? 0
+    const minFocus = subject.min_focus ?? 0
+    const maxFocus = subject.max_focus ?? 0
+    const avgProductivity = subject.avg_productivity ?? 0
+    
+    const focusRange = maxFocus > 0 && minFocus > 0 
+      ? `(ranging ${minFocus.toFixed(1)} to ${maxFocus.toFixed(1)})` 
       : ''
     
     recommendations.push({
       id: generateId(),
       userId,
       type: 'optimization',
-      priority: subject.avg_focus < 5 ? 'urgent' : 'high',
+      priority: avgFocus < 5 ? 'urgent' : 'high',
       title: `🎯 Improve Focus for ${subject.name}`,
-      description: `Your focus score for ${subject.name} is ${subject.avg_focus.toFixed(1)}/10 ${focusRange}, significantly below optimal performance.`,
+      description: `Your focus score for ${subject.name} is ${avgFocus.toFixed(1)}/10 ${focusRange}, significantly below optimal performance.`,
       rationale: `Across ${subject.session_count} sessions, you're struggling to maintain concentration for this subject.`,
       expectedOutcome: 'Achieve 8+/10 focus scores consistently, leading to better retention and faster learning',
       actionItems: [
@@ -303,9 +310,9 @@ function generateSubjectBasedRecommendations(userId: string, insights: {subjects
       confidence: 80,
       evidence: [
         `${subject.session_count} sessions analyzed`,
-        `Average focus: ${subject.avg_focus.toFixed(1)}/10`,
-        subject.min_focus ? `Lowest: ${subject.min_focus.toFixed(1)}/10` : '',
-        subject.avg_productivity ? `Productivity: ${subject.avg_productivity.toFixed(1)}%` : '',
+        `Average focus: ${avgFocus.toFixed(1)}/10`,
+        minFocus > 0 ? `Lowest: ${minFocus.toFixed(1)}/10` : '',
+        avgProductivity > 0 ? `Productivity: ${avgProductivity.toFixed(1)}%` : '',
         subject.total_minutes ? `Time invested: ${(subject.total_minutes / 60).toFixed(1)} hours` : ''
       ].filter(Boolean),
       tags: ['focus', 'optimization', 'concentration', subject.name.toLowerCase()],
@@ -320,17 +327,21 @@ function generateSubjectBasedRecommendations(userId: string, insights: {subjects
   console.log('Poor performance subjects (<75%, has assessments):', poorPerformanceSubjects.length, poorPerformanceSubjects.map(s => `${s.name}:${s.avg_performance}%`))
   
   poorPerformanceSubjects.forEach(subject => {
-    const performanceGap = 85 - (subject.avg_performance || 0) // Assuming 85% is target
+    const avgPerformance = subject.avg_performance ?? 0
+    const performanceGap = 85 - avgPerformance // Assuming 85% is target
     const hasWeaknesses = subject.all_weaknesses && subject.all_weaknesses !== '[]'
     const hasImprovementPlans = subject.improvement_plans && subject.improvement_plans !== ''
+    const avgFocus = subject.avg_focus ?? 0
+    const worstPerformance = subject.worst_performance ?? 0
+    const bestPerformance = subject.best_performance ?? 0
     
     recommendations.push({
       id: generateId(),
       userId,
       type: 'learning_method',
-      priority: subject.avg_performance < 60 ? 'urgent' : 'high',
+      priority: avgPerformance < 60 ? 'urgent' : 'high',
       title: `📉 ${subject.name} - Below Target Performance`,
-      description: `Assessment average: ${subject.avg_performance.toFixed(1)}% (${performanceGap.toFixed(1)}% below target). Current study approach needs significant improvement.`,
+      description: `Assessment average: ${avgPerformance.toFixed(1)}% (${performanceGap.toFixed(1)}% below target). Current study approach needs significant improvement.`,
       rationale: `After ${subject.performance_count} assessment(s) and ${subject.session_count} study sessions, results indicate ineffective learning strategies.`,
       expectedOutcome: 'Raise performance to 80%+ through targeted improvement strategies',
       actionItems: [
@@ -344,20 +355,20 @@ function generateSubjectBasedRecommendations(userId: string, insights: {subjects
         `Take practice tests BEFORE assessments to identify gaps early`,
         'Analyze past mistakes: what types of questions do you miss?',
         hasImprovementPlans ? 'IMPLEMENT your own improvement plans you wrote after assessments' : 'After each assessment, write specific action items',
-        subject.avg_focus && subject.avg_focus < 7 
-          ? `Also address low focus (${subject.avg_focus.toFixed(1)}/10) - see focus recommendations`
+        avgFocus > 0 && avgFocus < 7 
+          ? `Also address low focus (${avgFocus.toFixed(1)}/10) - see focus recommendations`
           : '',
         'Consider getting help: tutoring, office hours, or online resources'
       ].filter(Boolean),
       confidence: 90,
       evidence: [
         `${subject.performance_count} assessments analyzed`,
-        `Average score: ${subject.avg_performance.toFixed(1)}%`,
-        subject.worst_performance ? `Lowest score: ${subject.worst_performance.toFixed(1)}%` : '',
-        subject.best_performance ? `Best score: ${subject.best_performance.toFixed(1)}%` : '',
+        `Average score: ${avgPerformance.toFixed(1)}%`,
+        worstPerformance > 0 ? `Lowest score: ${worstPerformance.toFixed(1)}%` : '',
+        bestPerformance > 0 ? `Best score: ${bestPerformance.toFixed(1)}%` : '',
         `${subject.session_count} study sessions`,
         `Study time: ${((subject.total_minutes || 0) / 60).toFixed(1)} hours`,
-        subject.avg_focus ? `Focus level: ${subject.avg_focus.toFixed(1)}/10` : '',
+        avgFocus > 0 ? `Focus level: ${avgFocus.toFixed(1)}/10` : '',
         subject.last_assessment_date ? `Last assessment: ${new Date(subject.last_assessment_date).toLocaleDateString()}` : ''
       ].filter(Boolean),
       tags: ['performance', 'assessment', 'improvement-needed', subject.name.toLowerCase()],
@@ -1158,18 +1169,18 @@ export async function generateComprehensiveRecommendations(
  * Store recommendations in database
  */
 export async function storeRecommendationsBundle(bundle: RecommendationBundle): Promise<void> {
-  const { default: Database } = await import('better-sqlite3')
-  const path = await import('path')
-  const dbPath = path.default.join(process.cwd(), 'data', 'study-tracker.db')
-  const db = new Database(dbPath)
+  // Using Supabase PostgreSQL
+  // Path not needed for Supabase
+  // Database path not needed
+  const { db } = await import("@/lib/db-supabase")
   
-  const stmt = db.prepare(`
+  const stmt = await db.prepare(`
     INSERT INTO recommendations (
       id, user_id, type, priority, title, description,
       rationale, expected_outcome, action_items,
       confidence_score, evidence, tags,
       status, created_at
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending', datetime('now'))
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending', NOW())
   `)
   
   bundle.recommendations.forEach(rec => {
@@ -1189,7 +1200,7 @@ export async function storeRecommendationsBundle(bundle: RecommendationBundle): 
     )
   })
   
-  db.close()
+  // No need to close Supabase connection
 }
 
 /**
@@ -1199,12 +1210,12 @@ export async function getActiveRecommendations(
   userId: string,
   limit: number = 10
 ): Promise<ComprehensiveRecommendation[]> {
-  const { default: Database } = await import('better-sqlite3')
-  const path = await import('path')
-  const dbPath = path.default.join(process.cwd(), 'data', 'study-tracker.db')
-  const db = new Database(dbPath)
+  // Using Supabase PostgreSQL
+  // Path not needed for Supabase
+  // Database path not needed
+  const { db } = await import("@/lib/db-supabase")
   
-  const rows = db.prepare(`
+  const rows = await db.prepare(`
     SELECT * FROM recommendations
     WHERE user_id = ?
       AND status = 'pending'
@@ -1220,7 +1231,7 @@ export async function getActiveRecommendations(
     LIMIT ?
   `).all(userId, limit) as any[]
   
-  db.close()
+  // No need to close Supabase connection
   
   return rows.map(row => ({
     id: row.id,
@@ -1246,20 +1257,20 @@ export async function markRecommendationCompleted(
   recommendationId: string,
   feedback?: 'helpful' | 'not_helpful'
 ): Promise<void> {
-  const { default: Database } = await import('better-sqlite3')
-  const path = await import('path')
-  const dbPath = path.default.join(process.cwd(), 'data', 'study-tracker.db')
-  const db = new Database(dbPath)
+  // Using Supabase PostgreSQL
+  // Path not needed for Supabase
+  // Database path not needed
+  const { db } = await import("@/lib/db-supabase")
   
-  db.prepare(`
+  await db.prepare(`
     UPDATE recommendations
     SET status = 'completed',
         user_feedback = ?,
-        completed_at = datetime('now')
+        completed_at = NOW()
     WHERE id = ?
   `).run(feedback || null, recommendationId)
   
-  db.close()
+  // No need to close Supabase connection
 }
 
 /**
@@ -1268,4 +1279,5 @@ export async function markRecommendationCompleted(
 function generateId(): string {
   return Math.random().toString(36).substring(2, 15) + Date.now().toString(36)
 }
+
 

@@ -109,24 +109,15 @@ export async function createSpacedRepetitionItem(
   difficultyLevel: number = 3,
   chapterReference?: string
 ): Promise<SpacedRepetitionItem> {
-  const { default: Database } = await import('better-sqlite3')
-  const path = await import('path')
-  const fs = await import('fs')
-  const dbPath = path.default.join(process.cwd(), 'data', 'study-tracker.db')
-  
-  const dbDir = path.default.dirname(dbPath)
-  if (!fs.default.existsSync(dbDir)) {
-    fs.default.mkdirSync(dbDir, { recursive: true })
-  }
-  
-  const db = new Database(dbPath)
+  // Using Supabase PostgreSQL
+  const { db } = await import("@/lib/db-supabase")
   
   const id = Math.random().toString(36).substring(2, 15) + Date.now().toString(36)
   const initialStudyDate = new Date()
   const memoryStrength = calculateInitialMemoryStrength(confidence, difficultyLevel)
   const nextReviewDate = calculateNextReviewDate(initialStudyDate, memoryStrength)
   
-  const stmt = db.prepare(`
+  const stmt = await db.prepare(`
     INSERT INTO spaced_repetition_items (
       id, user_id, subject_id, topic_name, chapter_reference,
       initial_study_date, memory_strength, initial_confidence,
@@ -148,7 +139,7 @@ export async function createSpacedRepetitionItem(
     nextReviewDate.toISOString()
   )
   
-  db.close()
+  // No need to close Supabase connection
   
   return {
     id,
@@ -176,18 +167,18 @@ export async function recordReview(
   timeSpent: number,
   result: 'easy' | 'good' | 'hard' | 'forgot'
 ): Promise<void> {
-  const { default: Database } = await import('better-sqlite3')
-  const path = await import('path')
-  const dbPath = path.default.join(process.cwd(), 'data', 'study-tracker.db')
-  const db = new Database(dbPath)
+  // Using Supabase PostgreSQL
+  // Path not needed for Supabase
+  // Database path not needed
+  const { db } = await import("@/lib/db-supabase")
   
   // Get current item
-  const item = db.prepare(`
+  const item = await db.prepare(`
     SELECT * FROM spaced_repetition_items WHERE id = ?
   `).get(itemId) as any
   
   if (!item) {
-    db.close()
+    // No need to close Supabase connection
     throw new Error('Item not found')
   }
   
@@ -217,7 +208,7 @@ export async function recordReview(
     recentReviews.every((r: any) => r.confidence >= 8)
   
   // Update item
-  const updateStmt = db.prepare(`
+  const updateStmt = await db.prepare(`
     UPDATE spaced_repetition_items
     SET memory_strength = ?,
         next_review_date = ?,
@@ -226,7 +217,7 @@ export async function recordReview(
         last_review_confidence = ?,
         status = ?,
         review_history = ?,
-        updated_at = datetime('now')
+        updated_at = NOW()
     WHERE id = ?
   `)
   
@@ -240,7 +231,7 @@ export async function recordReview(
     itemId
   )
   
-  db.close()
+  // No need to close Supabase connection
 }
 
 /**
@@ -250,24 +241,24 @@ export async function getItemsDueForReview(
   userId: string,
   subjectId?: string
 ): Promise<SpacedRepetitionItem[]> {
-  const { default: Database } = await import('better-sqlite3')
-  const path = await import('path')
-  const dbPath = path.default.join(process.cwd(), 'data', 'study-tracker.db')
-  const db = new Database(dbPath)
+  // Using Supabase PostgreSQL
+  // Path not needed for Supabase
+  // Database path not needed
+  const { db } = await import("@/lib/db-supabase")
   
   const query = `
     SELECT * FROM spaced_repetition_items
     WHERE user_id = ?
       ${subjectId ? 'AND subject_id = ?' : ''}
       AND status = 'active'
-      AND date(next_review_date) <= date('now')
+      AND date(next_review_date) <= CURRENT_DATE
     ORDER BY next_review_date ASC
     LIMIT 20
   `
   
   const params = subjectId ? [userId, subjectId] : [userId]
-  const rows = db.prepare(query).all(...params) as any[]
-  db.close()
+  const rows = await db.prepare(query).all(...params) as any[]
+  // No need to close Supabase connection
   
   return rows.map(row => ({
     id: row.id,
@@ -299,10 +290,10 @@ export async function getReviewSchedule(
   userId: string,
   days: number = 7
 ): Promise<Map<string, SpacedRepetitionItem[]>> {
-  const { default: Database } = await import('better-sqlite3')
-  const path = await import('path')
-  const dbPath = path.default.join(process.cwd(), 'data', 'study-tracker.db')
-  const db = new Database(dbPath)
+  // Using Supabase PostgreSQL
+  // Path not needed for Supabase
+  // Database path not needed
+  const { db } = await import("@/lib/db-supabase")
   
   const endDate = new Date()
   endDate.setDate(endDate.getDate() + days)
@@ -315,8 +306,8 @@ export async function getReviewSchedule(
     ORDER BY next_review_date ASC
   `
   
-  const rows = db.prepare(query).all(userId, endDate.toISOString().split('T')[0]) as any[]
-  db.close()
+  const rows = await db.prepare(query).all(userId, endDate.toISOString().split('T')[0]) as any[]
+  // No need to close Supabase connection
   
   // Group by date
   const schedule = new Map<string, SpacedRepetitionItem[]>()
@@ -357,10 +348,10 @@ export async function getTopicsAtRisk(
   userId: string,
   retentionThreshold: number = 60
 ): Promise<SpacedRepetitionItem[]> {
-  const { default: Database } = await import('better-sqlite3')
-  const path = await import('path')
-  const dbPath = path.default.join(process.cwd(), 'data', 'study-tracker.db')
-  const db = new Database(dbPath)
+  // Using Supabase PostgreSQL
+  // Path not needed for Supabase
+  // Database path not needed
+  const { db } = await import("@/lib/db-supabase")
   
   const query = `
     SELECT * FROM spaced_repetition_items
@@ -369,8 +360,8 @@ export async function getTopicsAtRisk(
     ORDER BY memory_strength ASC
   `
   
-  const rows = db.prepare(query).all(userId) as any[]
-  db.close()
+  const rows = await db.prepare(query).all(userId) as any[]
+  // No need to close Supabase connection
   
   // Filter by retention estimate
   const atRisk: SpacedRepetitionItem[] = []
@@ -470,3 +461,4 @@ export async function generateReviewReminders(
   
   return reminders
 }
+

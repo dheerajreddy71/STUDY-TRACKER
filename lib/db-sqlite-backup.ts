@@ -1,25 +1,80 @@
-// PostgreSQL/Supabase Database Module
-// Migrated from SQLite to Supabase for production deployment
+import Database from "better-sqlite3"
+import path from "path"
+import fs from "fs"
 
-import { db as pgDb } from './db-supabase'
+// Initialize SQLite database
+const dbPath = path.join(process.cwd(), "data", "study-tracker.db")
+const dbDir = path.dirname(dbPath)
 
-// Database wrapper that mimics better-sqlite3 API but uses PostgreSQL
-const getDb = () => ({
-  prepare: (sql: string) => ({
-    run: async (...params: any[]) => {
-      await pgDb.prepare(sql).run(...params)
-    },
-    get: async (...params: any[]) => {
-      return await pgDb.prepare(sql).get(...params)
-    },
-    all: async (...params: any[]) => {
-      return await pgDb.prepare(sql).all(...params)
-    },
-  }),
-  exec: async (sql: string) => {
-    await pgDb.exec(sql)
-  },
-})
+// Ensure data directory exists
+if (!fs.existsSync(dbDir)) {
+  fs.mkdirSync(dbDir, { recursive: true })
+}
+
+let db: Database.Database | null = null
+
+function getDb() {
+  if (!db) {
+    db = new Database(dbPath)
+    db.pragma("journal_mode = WAL")
+    db.pragma("foreign_keys = ON")
+    initializeDatabase(db)
+  }
+  return db
+}
+
+function initializeDatabase(database: Database.Database) {
+  const schemaPath = path.join(process.cwd(), "scripts", "init-sqlite.sql")
+  if (fs.existsSync(schemaPath)) {
+    const schema = fs.readFileSync(schemaPath, "utf8")
+    database.exec(schema)
+  }
+  
+  // Run migrations to fix constraints and add missing columns
+  const migrations = [
+    "fix-constraints-migration.sql",
+    "expand-calendar-events-migration.sql"
+  ]
+  
+  for (const migrationFile of migrations) {
+    const migrationPath = path.join(process.cwd(), "scripts", migrationFile)
+    if (fs.existsSync(migrationPath)) {
+      try {
+        const migration = fs.readFileSync(migrationPath, "utf8")
+        // Split by semicolons and execute each statement
+        const statements = migration.split(';').filter(s => s.trim() && !s.trim().startsWith('--'))
+        for (const stmt of statements) {
+          try {
+            database.exec(stmt)
+          } catch (error: any) {
+            // Ignore "duplicate column" errors (migration already applied)
+            if (!error.message.includes('duplicate column') && 
+                !error.message.includes('already exists') &&
+                !error.message.includes('no such column') &&
+                !error.message.includes('no such table: performance_entries_backup')) {
+              console.error("Migration statement error:", stmt.substring(0, 100), error.message)
+            }
+          }
+        }
+        console.log(`✅ Applied ${migrationFile}`)
+      } catch (error) {
+        console.error(`Migration error (${migrationFile}):`, error)
+      }
+    }
+  }
+  
+  // Legacy migration for accomplishments column (keep for backward compatibility)
+  try {
+    const tableInfo = database.pragma("table_info(study_sessions)") as any[]
+    const hasAccomplishments = tableInfo.some((col: any) => col.name === "accomplishments")
+    if (!hasAccomplishments) {
+      database.exec("ALTER TABLE study_sessions ADD COLUMN accomplishments TEXT")
+      console.log("✅ Added accomplishments column to study_sessions table")
+    }
+  } catch (error) {
+    // Ignore if already exists
+  }
+}
 
 function generateId(): string {
   return (
@@ -86,7 +141,7 @@ export const database: any = {
       INSERT INTO users (id, email, name, education_level, primary_goal, study_style, energy_level, current_challenges, is_guest)
       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
     `)
-    await stmt.run(
+    stmt.run(
       id,
       user.email,
       user.name,
@@ -97,26 +152,26 @@ export const database: any = {
       JSON.stringify(user.currentChallenges),
       user.isGuest ? 1 : 0,
     )
-    return await database.prepare("SELECT * FROM users WHERE id = ?").get(id)
+    return database.prepare("SELECT * FROM users WHERE id = ?").get(id)
   },
 
   async getUser(id: string) {
     const database = getDb()
-    return await database.prepare("SELECT * FROM users WHERE id = ?").get(id)
+    return database.prepare("SELECT * FROM users WHERE id = ?").get(id)
   },
 
   async getUserByEmail(email: string) {
     const database = getDb()
-    return await database.prepare("SELECT * FROM users WHERE email = ?").get(email)
+    return database.prepare("SELECT * FROM users WHERE email = ?").get(email)
   },
 
   async updateUser(id: string, updates: Record<string, any>) {
     const database = getDb()
     const { keys, values } = validateAndSanitizeUpdates('users', updates)
     const setClause = keys.map((k) => `${k} = ?`).join(", ")
-    const stmt = database.prepare(`UPDATE users SET ${setClause}, updated_at = NOW() WHERE id = ?`)
-    await stmt.run(...values, id)
-    return await database.prepare("SELECT * FROM users WHERE id = ?").get(id)
+    const stmt = database.prepare(`UPDATE users SET ${setClause}, updated_at = datetime('now') WHERE id = ?`)
+    stmt.run(...values, id)
+    return database.prepare("SELECT * FROM users WHERE id = ?").get(id)
   },
 
   // Subjects
@@ -170,7 +225,7 @@ export const database: any = {
       )
       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `)
-    await stmt.run(
+    stmt.run(
       id,
       subject.userId,
       subject.name,
@@ -206,7 +261,7 @@ export const database: any = {
       subject.currentGrade || null,
       subject.targetGrade || null
     )
-    return await database.prepare("SELECT * FROM subjects WHERE id = ?").get(id)
+    return database.prepare("SELECT * FROM subjects WHERE id = ?").get(id)
   },
 
   async getSubjects(userId: string) {
@@ -230,21 +285,21 @@ export const database: any = {
 
   async getSubject(id: string) {
     const database = getDb()
-    return await database.prepare("SELECT * FROM subjects WHERE id = ?").get(id)
+    return database.prepare("SELECT * FROM subjects WHERE id = ?").get(id)
   },
 
   async updateSubject(id: string, updates: Record<string, any>) {
     const database = getDb()
     const { keys, values } = validateAndSanitizeUpdates('subjects', updates)
     const setClause = keys.map((k) => `${k} = ?`).join(", ")
-    const stmt = database.prepare(`UPDATE subjects SET ${setClause}, updated_at = NOW() WHERE id = ?`)
-    await stmt.run(...values, id)
-    return await database.prepare("SELECT * FROM subjects WHERE id = ?").get(id)
+    const stmt = database.prepare(`UPDATE subjects SET ${setClause}, updated_at = datetime('now') WHERE id = ?`)
+    stmt.run(...values, id)
+    return database.prepare("SELECT * FROM subjects WHERE id = ?").get(id)
   },
 
   async deleteSubject(id: string) {
     const database = getDb()
-    await database.prepare("UPDATE subjects SET is_active = 0 WHERE id = ?").run(id)
+    database.prepare("UPDATE subjects SET is_active = 0 WHERE id = ?").run(id)
   },
 
   // Study Sessions
@@ -263,7 +318,7 @@ export const database: any = {
       INSERT INTO study_sessions (id, user_id, subject_id, study_method, session_goal, location, target_duration_minutes, started_at, duration_minutes)
       VALUES (?, ?, ?, ?, ?, ?, ?, ?, 0)
     `)
-    await stmt.run(
+    stmt.run(
       id,
       session.userId,
       session.subjectId,
@@ -273,7 +328,7 @@ export const database: any = {
       session.targetDurationMinutes || 50,
       typeof session.startedAt === 'string' ? session.startedAt : session.startedAt.toISOString(),
     )
-    return await database.prepare("SELECT * FROM study_sessions WHERE id = ?").get(id)
+    return database.prepare("SELECT * FROM study_sessions WHERE id = ?").get(id)
   },
 
   async getSessions(userId: string, limit = 50, offset = 0) {
@@ -295,7 +350,7 @@ export const database: any = {
 
   async getSession(id: string) {
     const database = getDb()
-    return await database.prepare(`
+    return database.prepare(`
       SELECT 
         ss.*,
         s.name as subject_name,
@@ -311,15 +366,15 @@ export const database: any = {
     const database = getDb()
     const { keys, values } = validateAndSanitizeUpdates('study_sessions', updates)
     const setClause = keys.map((k) => `${k} = ?`).join(", ")
-    const stmt = database.prepare(`UPDATE study_sessions SET ${setClause}, updated_at = NOW() WHERE id = ?`)
-    await stmt.run(...values, id)
-    return await database.prepare("SELECT * FROM study_sessions WHERE id = ?").get(id)
+    const stmt = database.prepare(`UPDATE study_sessions SET ${setClause}, updated_at = datetime('now') WHERE id = ?`)
+    stmt.run(...values, id)
+    return database.prepare("SELECT * FROM study_sessions WHERE id = ?").get(id)
   },
 
   async deleteSession(id: string) {
     const database = getDb()
     // Permanently remove a session record. Use with caution.
-    await database.prepare("DELETE FROM study_sessions WHERE id = ?").run(id)
+    database.prepare("DELETE FROM study_sessions WHERE id = ?").run(id)
   },
 
   async endSession(
@@ -404,10 +459,10 @@ export const database: any = {
           schedule_next_session = ?,
           overall_notes = ?,
           session_tags = ?,
-          updated_at = NOW()
+          updated_at = datetime('now')
       WHERE id = ?
     `)
-    await stmt.run(
+    stmt.run(
       endedAt,
       endData.actualDurationMinutes,
       endData.averageFocusScore,
@@ -447,7 +502,7 @@ export const database: any = {
       endData.sessionTags || null,
       id,
     )
-    return await database.prepare("SELECT * FROM study_sessions WHERE id = ?").get(id)
+    return database.prepare("SELECT * FROM study_sessions WHERE id = ?").get(id)
   },
 
   // Focus Check-ins
@@ -458,13 +513,13 @@ export const database: any = {
       INSERT INTO focus_checkins (id, session_id, focus_score)
       VALUES (?, ?, ?)
     `)
-    await stmt.run(id, sessionId, focusScore)
+    stmt.run(id, sessionId, focusScore)
     return { id, sessionId, focusScore }
   },
 
   async getFocusCheckins(sessionId: string) {
     const database = getDb()
-    return await database.prepare("SELECT * FROM focus_checkins WHERE session_id = ? ORDER BY timestamp ASC").all(sessionId)
+    return database.prepare("SELECT * FROM focus_checkins WHERE session_id = ? ORDER BY timestamp ASC").all(sessionId)
   },
 
   // Performance Entries
@@ -637,7 +692,7 @@ export const database: any = {
       )
     `)
     
-    await stmt.run(
+    stmt.run(
       id,
       entry.userId,
       entry.subjectId,
@@ -736,12 +791,12 @@ export const database: any = {
       entry.timeSpentMinutes || null,
       entry.notes || null,
     )
-    return await database.prepare("SELECT * FROM performance_entries WHERE id = ?").get(id)
+    return database.prepare("SELECT * FROM performance_entries WHERE id = ?").get(id)
   },
 
   async getPerformance(userId: string) {
     const database = getDb()
-    return await database.prepare(`
+    return database.prepare(`
       SELECT 
         pe.*,
         s.name as subject_name
@@ -771,9 +826,9 @@ export const database: any = {
     const database = getDb()
     const { keys, values } = validateAndSanitizeUpdates('performance_entries', updates)
     const setClause = keys.map((k) => `${k} = ?`).join(", ")
-    const stmt = database.prepare(`UPDATE performance_entries SET ${setClause}, updated_at = NOW() WHERE id = ?`)
-    await stmt.run(...values, id)
-    return await database.prepare("SELECT * FROM performance_entries WHERE id = ?").get(id)
+    const stmt = database.prepare(`UPDATE performance_entries SET ${setClause}, updated_at = datetime('now') WHERE id = ?`)
+    stmt.run(...values, id)
+    return database.prepare("SELECT * FROM performance_entries WHERE id = ?").get(id)
   },
 
   // Goals
@@ -835,13 +890,13 @@ export const database: any = {
       INSERT INTO goals (${fields.join(', ')})
       VALUES (${placeholders.join(', ')})
     `)
-    await stmt.run(...values)
-    return await database.prepare("SELECT * FROM goals WHERE id = ?").get(id)
+    stmt.run(...values)
+    return database.prepare("SELECT * FROM goals WHERE id = ?").get(id)
   },
 
   async getGoals(userId: string) {
     const database = getDb()
-    const goals = await database.prepare("SELECT * FROM goals WHERE user_id = ? ORDER BY created_at DESC").all(userId)
+    const goals = database.prepare("SELECT * FROM goals WHERE user_id = ? ORDER BY created_at DESC").all(userId)
     
     // Transform snake_case to camelCase and calculate percentage
     return goals.map((goal: any) => {
@@ -893,7 +948,7 @@ export const database: any = {
   
   async getGoal(id: string) {
     const database = getDb()
-    const goal: any = await database.prepare("SELECT * FROM goals WHERE id = ?").get(id)
+    const goal: any = database.prepare("SELECT * FROM goals WHERE id = ?").get(id)
     
     if (!goal) return null
     
@@ -946,15 +1001,15 @@ export const database: any = {
     const database = getDb()
     const { keys, values } = validateAndSanitizeUpdates('goals', updates)
     const setClause = keys.map((k) => `${k} = ?`).join(", ")
-    const stmt = database.prepare(`UPDATE goals SET ${setClause}, updated_at = NOW() WHERE id = ?`)
-    await stmt.run(...values, id)
-    return await database.prepare("SELECT * FROM goals WHERE id = ?").get(id)
+    const stmt = database.prepare(`UPDATE goals SET ${setClause}, updated_at = datetime('now') WHERE id = ?`)
+    stmt.run(...values, id)
+    return database.prepare("SELECT * FROM goals WHERE id = ?").get(id)
   },
   
   async deleteGoal(id: string) {
     const database = getDb()
     const stmt = database.prepare("DELETE FROM goals WHERE id = ?")
-    await stmt.run(id)
+    stmt.run(id)
   },
 
   // Achievements
@@ -971,7 +1026,7 @@ export const database: any = {
       INSERT INTO achievements (id, user_id, achievement_type, achievement_name, description, badge_icon)
       VALUES (?, ?, ?, ?, ?, ?)
     `)
-    await stmt.run(
+    stmt.run(
       id,
       achievement.userId,
       achievement.achievementType,
@@ -979,28 +1034,28 @@ export const database: any = {
       achievement.description || null,
       achievement.badgeIcon || null,
     )
-    return await database.prepare("SELECT * FROM achievements WHERE id = ?").get(id)
+    return database.prepare("SELECT * FROM achievements WHERE id = ?").get(id)
   },
 
   // Preferences
   async getOrCreatePreferences(userId: string) {
     const database = getDb()
-    const existing = await database.prepare("SELECT * FROM user_preferences WHERE user_id = ?").get(userId)
+    const existing = database.prepare("SELECT * FROM user_preferences WHERE user_id = ?").get(userId)
     if (existing) return existing
 
     const id = generateId()
     const stmt = database.prepare("INSERT INTO user_preferences (id, user_id) VALUES (?, ?)")
-    await stmt.run(id, userId)
-    return await database.prepare("SELECT * FROM user_preferences WHERE id = ?").get(id)
+    stmt.run(id, userId)
+    return database.prepare("SELECT * FROM user_preferences WHERE id = ?").get(id)
   },
 
   async updatePreferences(userId: string, updates: Record<string, any>) {
     const database = getDb()
     const { keys, values } = validateAndSanitizeUpdates('user_preferences', updates)
     const setClause = keys.map((k) => `${k} = ?`).join(", ")
-    const stmt = database.prepare(`UPDATE user_preferences SET ${setClause}, updated_at = NOW() WHERE user_id = ?`)
-    await stmt.run(...values, userId)
-    return await database.prepare("SELECT * FROM user_preferences WHERE user_id = ?").get(userId)
+    const stmt = database.prepare(`UPDATE user_preferences SET ${setClause}, updated_at = datetime('now') WHERE user_id = ?`)
+    stmt.run(...values, userId)
+    return database.prepare("SELECT * FROM user_preferences WHERE user_id = ?").get(userId)
   },
 
   // Scheduled Sessions
@@ -1018,7 +1073,7 @@ export const database: any = {
       INSERT INTO scheduled_sessions (id, user_id, subject_id, scheduled_date, scheduled_time, duration_minutes, study_method)
       VALUES (?, ?, ?, ?, ?, ?, ?)
     `)
-    await stmt.run(
+    stmt.run(
       id,
       session.userId,
       session.subjectId,
@@ -1027,7 +1082,7 @@ export const database: any = {
       session.durationMinutes,
       session.studyMethod || null,
     )
-    return await database.prepare("SELECT * FROM scheduled_sessions WHERE id = ?").get(id)
+    return database.prepare("SELECT * FROM scheduled_sessions WHERE id = ?").get(id)
   },
 
   async getScheduledSessions(userId: string, fromDate?: string, toDate?: string) {
@@ -1037,12 +1092,12 @@ export const database: any = {
         .prepare("SELECT * FROM scheduled_sessions WHERE user_id = ? AND scheduled_date BETWEEN ? AND ? ORDER BY scheduled_date, scheduled_time")
         .all(userId, fromDate, toDate)
     }
-    return await database.prepare("SELECT * FROM scheduled_sessions WHERE user_id = ? ORDER BY scheduled_date, scheduled_time").all(userId)
+    return database.prepare("SELECT * FROM scheduled_sessions WHERE user_id = ? ORDER BY scheduled_date, scheduled_time").all(userId)
   },
 
   async completeScheduledSession(id: string, completedSessionId: string) {
     const database = getDb()
-    await database.prepare("UPDATE scheduled_sessions SET is_completed = 1, completed_session_id = ? WHERE id = ?").run(completedSessionId, id)
+    database.prepare("UPDATE scheduled_sessions SET is_completed = 1, completed_session_id = ? WHERE id = ?").run(completedSessionId, id)
   },
 
   // Method Effectiveness
@@ -1071,15 +1126,15 @@ export const database: any = {
         SET total_sessions = ?, 
             average_focus_score = ?, 
             average_performance_improvement = ?,
-            last_used = CURRENT_DATE,
-            updated_at = NOW()
+            last_used = date('now'),
+            updated_at = datetime('now')
         WHERE id = ?
       `).run(newTotal, newAvgFocus, newAvgPerf, existing.id)
     } else {
       const id = generateId()
       database.prepare(`
         INSERT INTO method_effectiveness (id, user_id, subject_id, study_method, total_sessions, average_focus_score, average_performance_improvement, last_used)
-        VALUES (?, ?, ?, ?, 1, ?, ?, CURRENT_DATE)
+        VALUES (?, ?, ?, ?, 1, ?, ?, date('now'))
       `).run(id, userId, subjectId, studyMethod, focusScore, performanceImprovement || null)
     }
   },
@@ -1091,7 +1146,7 @@ export const database: any = {
         .prepare("SELECT * FROM method_effectiveness WHERE user_id = ? AND subject_id = ?")
         .all(userId, subjectId)
     }
-    return await database.prepare("SELECT * FROM method_effectiveness WHERE user_id = ?").all(userId)
+    return database.prepare("SELECT * FROM method_effectiveness WHERE user_id = ?").all(userId)
   },
 
   // Reports
@@ -1110,7 +1165,7 @@ export const database: any = {
       INSERT INTO reports (id, user_id, report_type, start_date, end_date, total_study_hours, sessions_count, report_data)
       VALUES (?, ?, ?, ?, ?, ?, ?, ?)
     `)
-    await stmt.run(
+    stmt.run(
       id,
       report.userId,
       report.reportType,
@@ -1120,12 +1175,12 @@ export const database: any = {
       report.sessionsCount || null,
       report.reportData ? JSON.stringify(report.reportData) : null,
     )
-    return await database.prepare("SELECT * FROM reports WHERE id = ?").get(id)
+    return database.prepare("SELECT * FROM reports WHERE id = ?").get(id)
   },
 
   async getReports(userId: string) {
     const database = getDb()
-    return await database.prepare("SELECT * FROM reports WHERE user_id = ? ORDER BY created_at DESC").all(userId)
+    return database.prepare("SELECT * FROM reports WHERE user_id = ? ORDER BY created_at DESC").all(userId)
   },
 
   // Analytics queries
@@ -1293,13 +1348,13 @@ export const database: any = {
       INSERT INTO resources (${fields.join(', ')})
       VALUES (${placeholders.join(', ')})
     `)
-    await stmt.run(...values)
-    return await database.prepare("SELECT * FROM resources WHERE id = ?").get(id)
+    stmt.run(...values)
+    return database.prepare("SELECT * FROM resources WHERE id = ?").get(id)
   },
 
   async getResources(userId: string) {
     const database = getDb()
-    const resources = await database.prepare(`
+    const resources = database.prepare(`
       SELECT r.*, s.name as subject_name
       FROM resources r
       LEFT JOIN subjects s ON r.primary_subject_id = s.id
@@ -1336,7 +1391,7 @@ export const database: any = {
 
   async getResource(id: string) {
     const database = getDb()
-    const resource: any = await database.prepare("SELECT * FROM resources WHERE id = ?").get(id)
+    const resource: any = database.prepare("SELECT * FROM resources WHERE id = ?").get(id)
     
     if (!resource) return null
     
@@ -1368,7 +1423,7 @@ export const database: any = {
 
   async getResourcesBySubject(subjectId: string) {
     const database = getDb()
-    return await database.prepare(`
+    return database.prepare(`
       SELECT * FROM resources 
       WHERE primary_subject_id = ? OR secondary_subject_ids LIKE ?
       ORDER BY resource_name
@@ -1379,13 +1434,13 @@ export const database: any = {
     const database = getDb()
     const { keys, values } = validateAndSanitizeUpdates('resources', updates)
     const setClause = keys.map(key => `${key} = ?`).join(", ")
-    database.prepare(`UPDATE resources SET ${setClause}, updated_at = NOW() WHERE id = ?`).run(...values, id)
-    return await database.prepare("SELECT * FROM resources WHERE id = ?").get(id)
+    database.prepare(`UPDATE resources SET ${setClause}, updated_at = datetime('now') WHERE id = ?`).run(...values, id)
+    return database.prepare("SELECT * FROM resources WHERE id = ?").get(id)
   },
 
   async deleteResource(id: string) {
     const database = getDb()
-    await database.prepare("DELETE FROM resources WHERE id = ?").run(id)
+    database.prepare("DELETE FROM resources WHERE id = ?").run(id)
   },
 
   async updateResourceProgress(id: string, pagesRead: number, percentage: number) {
@@ -1393,8 +1448,8 @@ export const database: any = {
     database.prepare(`
       UPDATE resources 
       SET current_progress_pages = ?, current_progress_percentage = ?,
-          last_accessed = NOW(), times_accessed = times_accessed + 1,
-          updated_at = NOW()
+          last_accessed = datetime('now'), times_accessed = times_accessed + 1,
+          updated_at = datetime('now')
       WHERE id = ?
     `).run(pagesRead, percentage, id)
   },
@@ -1404,7 +1459,7 @@ export const database: any = {
     database.prepare(`
       UPDATE resources 
       SET personal_rating = ?, usefulness_rating = ?, quality_rating = ?,
-          updated_at = NOW()
+          updated_at = datetime('now')
       WHERE id = ?
     `).run(personalRating, usefulnessRating, qualityRating, id)
   },
@@ -1460,20 +1515,20 @@ export const database: any = {
       notification.expiryDate || null,
       notification.repeatSchedule || null,
     )
-    return await database.prepare("SELECT * FROM notifications WHERE id = ?").get(id)
+    return database.prepare("SELECT * FROM notifications WHERE id = ?").get(id)
   },
 
   async getNotifications(userId: string, status?: string) {
     const database = getDb()
     if (status) {
-      return await database.prepare(`
+      return database.prepare(`
         SELECT * FROM notifications 
         WHERE user_id = ? AND status = ?
         ORDER BY created_at DESC
         LIMIT 100
       `).all(userId, status)
     }
-    return await database.prepare(`
+    return database.prepare(`
       SELECT * FROM notifications 
       WHERE user_id = ?
       ORDER BY created_at DESC
@@ -1495,7 +1550,7 @@ export const database: any = {
     const database = getDb()
     database.prepare(`
       UPDATE notifications 
-      SET status = 'read', read_at = NOW()
+      SET status = 'read', read_at = datetime('now')
       WHERE id = ?
     `).run(id)
   },
@@ -1504,14 +1559,14 @@ export const database: any = {
     const database = getDb()
     database.prepare(`
       UPDATE notifications 
-      SET status = 'acted_upon', user_action_taken = ?, acted_upon_at = NOW()
+      SET status = 'acted_upon', user_action_taken = ?, acted_upon_at = datetime('now')
       WHERE id = ?
     `).run(actionTaken, id)
   },
 
   async dismissNotification(id: string, reason?: string) {
     const database = getDb()
-    await database.prepare(`
+    database.prepare(`
       UPDATE notifications 
       SET status = 'dismissed', dismissed_reason = ?
       WHERE id = ?
@@ -1520,7 +1575,7 @@ export const database: any = {
 
   async snoozeNotification(id: string, snoozeUntil: string) {
     const database = getDb()
-    await database.prepare(`
+    database.prepare(`
       UPDATE notifications 
       SET snoozed_until = ?
       WHERE id = ?
@@ -1577,7 +1632,7 @@ export const database: any = {
 
   async getAchievements(userId: string) {
     const database = getDb()
-    return await database.prepare(`
+    return database.prepare(`
       SELECT * FROM achievements 
       WHERE user_id = ?
       ORDER BY earned_at DESC, created_at DESC
@@ -1586,7 +1641,7 @@ export const database: any = {
 
   async unlockAchievement(userId: string, achievementType: string) {
     const database = getDb()
-    const achievement = await database.prepare(`
+    const achievement = database.prepare(`
       SELECT * FROM achievements 
       WHERE user_id = ? AND achievement_type = ?
     `).get(userId, achievementType) as any
@@ -1596,15 +1651,11 @@ export const database: any = {
       return achievement
     }
 
-    // Generate ID
-    const id = generateId()
-
-    // Create new achievement with RETURNING clause for PostgreSQL
-    const newAchievement = await database.prepare(`
-      INSERT INTO achievements (id, user_id, achievement_type, achievement_name, description, badge_icon)
-      VALUES (?, ?, ?, ?, ?, ?)
+    // Create new achievement
+    const newAchievement = database.prepare(`
+      INSERT INTO achievements (user_id, achievement_type, achievement_name, description, badge_icon)
+      VALUES (?, ?, ?, ?, ?)
     `).run(
-      id,
       userId,
       achievementType,
       achievementType.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase()),
@@ -1612,7 +1663,7 @@ export const database: any = {
       '🏆'
     )
 
-    return await database.prepare('SELECT * FROM achievements WHERE id = ?').get(id)
+    return database.prepare('SELECT * FROM achievements WHERE id = ?').get(newAchievement.lastInsertRowid)
   },
 
   async updateAchievementProgress(userId: string, achievementType: string, progress: number) {
@@ -1627,7 +1678,7 @@ export const database: any = {
 
   async getStreaks(userId: string) {
     const database = getDb()
-    return await database.prepare(`
+    return database.prepare(`
       SELECT s.*, sub.name as subject_name
       FROM streaks s
       LEFT JOIN subjects sub ON s.subject_id = sub.id
@@ -1638,12 +1689,12 @@ export const database: any = {
   async getStreak(userId: string, streakType: string, subjectId?: string) {
     const database = getDb()
     if (subjectId) {
-      return await database.prepare(`
+      return database.prepare(`
         SELECT * FROM streaks 
         WHERE user_id = ? AND streak_type = ? AND subject_id = ?
       `).get(userId, streakType, subjectId)
     }
-    return await database.prepare(`
+    return database.prepare(`
       SELECT * FROM streaks 
       WHERE user_id = ? AND streak_type = ? AND subject_id IS NULL
     `).get(userId, streakType)
@@ -1666,7 +1717,7 @@ export const database: any = {
          ORDER BY session_date DESC`
     
     const params = subjectId ? [userId, subjectId] : [userId]
-    const sessions = await database.prepare(query).all(...params) as any[]
+    const sessions = database.prepare(query).all(...params) as any[]
     
     if (sessions.length === 0) {
       return {
@@ -1749,7 +1800,7 @@ export const database: any = {
       // Consecutive day, increment streak
       const newStreak = streak.current_streak + 1
       const newLongest = Math.max(newStreak, streak.longest_streak)
-      await database.prepare(`
+      database.prepare(`
         UPDATE streaks 
         SET current_streak = ?, longest_streak = ?, last_activity_date = ?
         WHERE id = ?
@@ -1759,7 +1810,7 @@ export const database: any = {
       // Streak broken, reset
       database.prepare(`
         UPDATE streaks 
-        SET current_streak = 1, streak_start_date = ?, last_activity_date = ?, status = 'broken', broken_at = NOW()
+        SET current_streak = 1, streak_start_date = ?, last_activity_date = ?, status = 'broken', broken_at = datetime('now')
         WHERE id = ?
       `).run(today, today, streak.id)
       return 1
@@ -1807,19 +1858,19 @@ export const database: any = {
       challenge.difficultyLevel || 'medium',
       challenge.progressTarget,
     )
-    return await database.prepare("SELECT * FROM challenges WHERE id = ?").get(id)
+    return database.prepare("SELECT * FROM challenges WHERE id = ?").get(id)
   },
 
   async getChallenges(userId: string, status?: string) {
     const database = getDb()
     if (status) {
-      return await database.prepare(`
+      return database.prepare(`
         SELECT * FROM challenges 
         WHERE user_id = ? AND status = ?
         ORDER BY end_date DESC
       `).all(userId, status)
     }
-    return await database.prepare(`
+    return database.prepare(`
       SELECT * FROM challenges 
       WHERE user_id = ?
       ORDER BY status ASC, end_date DESC
@@ -1832,25 +1883,25 @@ export const database: any = {
       UPDATE challenges 
       SET progress_current = ?, 
           progress_percentage = (CAST(? AS REAL) / progress_target * 100),
-          updated_at = NOW()
+          updated_at = datetime('now')
       WHERE id = ?
     `).run(progressCurrent, progressCurrent, id)
 
     // Check if challenge is completed
-    const challenge = await database.prepare(`
+    const challenge = database.prepare(`
       SELECT * FROM challenges WHERE id = ?
     `).get(id) as any
 
     if (challenge && challenge.progress_current >= challenge.progress_target) {
       database.prepare(`
         UPDATE challenges 
-        SET status = 'completed', completed_at = NOW()
+        SET status = 'completed', completed_at = datetime('now')
         WHERE id = ?
       `).run(id)
 
       // Award XP if applicable
       if (challenge.xp_reward > 0) {
-        await database.prepare(`
+        database.prepare(`
           UPDATE users 
           SET xp_points = xp_points + ?
           WHERE id = ?
@@ -1934,20 +1985,20 @@ export const database: any = {
       insight.affectedGoals ? JSON.stringify(insight.affectedGoals) : null,
       insight.relatedInsights ? JSON.stringify(insight.relatedInsights) : null,
     )
-    return await database.prepare("SELECT * FROM insights WHERE id = ?").get(id)
+    return database.prepare("SELECT * FROM insights WHERE id = ?").get(id)
   },
 
   async getInsights(userId: string, onlyRelevant = true) {
     const database = getDb()
     if (onlyRelevant) {
-      return await database.prepare(`
+      return database.prepare(`
         SELECT * FROM insights 
         WHERE user_id = ? AND currently_relevant = 1 AND dismissed = 0
         ORDER BY priority_score DESC, discovery_date DESC
         LIMIT 50
       `).all(userId)
     }
-    return await database.prepare(`
+    return database.prepare(`
       SELECT * FROM insights 
       WHERE user_id = ?
       ORDER BY discovery_date DESC
@@ -1959,14 +2010,14 @@ export const database: any = {
     const database = getDb()
     database.prepare(`
       UPDATE insights 
-      SET acknowledged = 1, acknowledged_date = NOW()
+      SET acknowledged = 1, acknowledged_date = datetime('now')
       WHERE id = ?
     `).run(id)
   },
 
   async rateInsight(id: string, rating: string, feedback?: string) {
     const database = getDb()
-    await database.prepare(`
+    database.prepare(`
       UPDATE insights 
       SET user_rating = ?, user_feedback = ?
       WHERE id = ?
@@ -1975,7 +2026,7 @@ export const database: any = {
 
   async bookmarkInsight(id: string) {
     const database = getDb()
-    await database.prepare(`
+    database.prepare(`
       UPDATE insights 
       SET bookmarked = 1
       WHERE id = ?
@@ -1984,7 +2035,7 @@ export const database: any = {
 
   async dismissInsight(id: string, reason?: string) {
     const database = getDb()
-    await database.prepare(`
+    database.prepare(`
       UPDATE insights 
       SET dismissed = 1, dismiss_reason = ?
       WHERE id = ?
@@ -2094,12 +2145,12 @@ export const database: any = {
       event.actualEndTime || null,
       event.cancellationReason || null,
     )
-    return await database.prepare("SELECT * FROM calendar_events WHERE id = ?").get(id)
+    return database.prepare("SELECT * FROM calendar_events WHERE id = ?").get(id)
   },
 
   async getCalendarEvent(id: string) {
     const database = getDb()
-    return await database.prepare(`
+    return database.prepare(`
       SELECT ce.*, s.name as subject_name, s.color_theme as color_code
       FROM calendar_events ce
       LEFT JOIN subjects s ON ce.subject_id = s.id
@@ -2109,7 +2160,7 @@ export const database: any = {
 
   async getCalendarEvents(userId: string, startDate: string, endDate: string) {
     const database = getDb()
-    return await database.prepare(`
+    return database.prepare(`
       SELECT ce.*, s.name as subject_name, s.color_theme as color_code
       FROM calendar_events ce
       LEFT JOIN subjects s ON ce.subject_id = s.id
@@ -2122,18 +2173,18 @@ export const database: any = {
     const database = getDb()
     const { keys, values } = validateAndSanitizeUpdates('calendar_events', updates)
     const setClause = keys.map(key => `${key} = ?`).join(", ")
-    database.prepare(`UPDATE calendar_events SET ${setClause}, updated_at = NOW() WHERE id = ?`).run(...values, id)
-    return await database.prepare("SELECT * FROM calendar_events WHERE id = ?").get(id)
+    database.prepare(`UPDATE calendar_events SET ${setClause}, updated_at = datetime('now') WHERE id = ?`).run(...values, id)
+    return database.prepare("SELECT * FROM calendar_events WHERE id = ?").get(id)
   },
 
   async deleteCalendarEvent(id: string) {
     const database = getDb()
-    await database.prepare("DELETE FROM calendar_events WHERE id = ?").run(id)
+    database.prepare("DELETE FROM calendar_events WHERE id = ?").run(id)
   },
 
   async markEventCompleted(id: string, actualSessionId: string) {
     const database = getDb()
-    await database.prepare(`
+    database.prepare(`
       UPDATE calendar_events 
       SET status = 'completed', actual_session_id = ?
       WHERE id = ?
@@ -2173,19 +2224,19 @@ export const database: any = {
       plan.totalPlannedHours || null,
       plan.sessionsPlanned || null,
     )
-    return await database.prepare("SELECT * FROM study_plans WHERE id = ?").get(id)
+    return database.prepare("SELECT * FROM study_plans WHERE id = ?").get(id)
   },
 
   async getStudyPlans(userId: string, status?: string) {
     const database = getDb()
     if (status) {
-      return await database.prepare(`
+      return database.prepare(`
         SELECT * FROM study_plans 
         WHERE user_id = ? AND status = ?
         ORDER BY start_date DESC
       `).all(userId, status)
     }
-    return await database.prepare(`
+    return database.prepare(`
       SELECT * FROM study_plans 
       WHERE user_id = ?
       ORDER BY status ASC, start_date DESC
@@ -2198,7 +2249,7 @@ export const database: any = {
       UPDATE study_plans 
       SET total_completed_hours = ?, sessions_completed = ?,
           completion_percentage = (CAST(? AS REAL) / total_planned_hours * 100),
-          updated_at = NOW()
+          updated_at = datetime('now')
       WHERE id = ?
     `).run(completedHours, completedSessions, completedHours, id)
   },
@@ -2235,12 +2286,12 @@ export const database: any = {
       collection.colorCode || null,
       collection.icon || null,
     )
-    return await database.prepare("SELECT * FROM resource_collections WHERE id = ?").get(id)
+    return database.prepare("SELECT * FROM resource_collections WHERE id = ?").get(id)
   },
 
   async getResourceCollections(userId: string) {
     const database = getDb()
-    return await database.prepare(`
+    return database.prepare(`
       SELECT * FROM resource_collections 
       WHERE user_id = ?
       ORDER BY created_at DESC
@@ -2251,15 +2302,14 @@ export const database: any = {
     const database = getDb()
     const { keys, values } = validateAndSanitizeUpdates('resource_collections', updates)
     const setClause = keys.map(key => `${key} = ?`).join(", ")
-    database.prepare(`UPDATE resource_collections SET ${setClause}, updated_at = NOW() WHERE id = ?`).run(...values, id)
+    database.prepare(`UPDATE resource_collections SET ${setClause}, updated_at = datetime('now') WHERE id = ?`).run(...values, id)
   },
 
   async deleteResourceCollection(id: string) {
     const database = getDb()
-    await database.prepare("DELETE FROM resource_collections WHERE id = ?").run(id)
+    database.prepare("DELETE FROM resource_collections WHERE id = ?").run(id)
   },
 }
 
 export { generateId, getDb }
-
 

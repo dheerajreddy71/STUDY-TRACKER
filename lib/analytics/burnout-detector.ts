@@ -73,13 +73,13 @@ export async function assessBurnoutRisk(userId: string): Promise<BurnoutAssessme
  */
 async function assessFocusDecline(userId: string): Promise<BurnoutIndicator> {
   try {
-    const { default: Database } = await import('better-sqlite3')
-    const path = await import('path')
-    const dbPath = path.default.join(process.cwd(), 'data', 'study-tracker.db')
-    const db = new Database(dbPath)
+    // Using Supabase PostgreSQL
+    // Path not needed for Supabase
+    // Database path not needed
+    const { db } = await import("@/lib/db-supabase")
     
     // Get baseline (first month average)
-    const baseline = db.prepare(`
+    const baseline = await db.prepare(`
       SELECT AVG(average_focus_score) as avg_focus
       FROM study_sessions
       WHERE user_id = ?
@@ -89,7 +89,7 @@ async function assessFocusDecline(userId: string): Promise<BurnoutIndicator> {
     `).get(userId) as { avg_focus: number } | undefined
     
     // Get recent (last 2 weeks)
-    const recent = db.prepare(`
+    const recent = await db.prepare(`
       SELECT AVG(average_focus_score) as avg_focus
       FROM study_sessions
       WHERE user_id = ?
@@ -97,7 +97,7 @@ async function assessFocusDecline(userId: string): Promise<BurnoutIndicator> {
         AND average_focus_score IS NOT NULL
     `).get(userId) as { avg_focus: number } | undefined
     
-    db.close()
+    // No need to close Supabase connection
     
     if (!baseline?.avg_focus || !recent?.avg_focus) {
       return {
@@ -159,13 +159,13 @@ async function assessFocusDecline(userId: string): Promise<BurnoutIndicator> {
  */
 async function assessPerformanceEffortMismatch(userId: string): Promise<BurnoutIndicator> {
   try {
-    const { default: Database } = await import('better-sqlite3')
-    const path = await import('path')
-    const dbPath = path.default.join(process.cwd(), 'data', 'study-tracker.db')
-    const db = new Database(dbPath)
+    // Using Supabase PostgreSQL
+    // Path not needed for Supabase
+    // Database path not needed
+    const { db } = await import("@/lib/db-supabase")
     
     // Get study hours trend
-    const hoursData = db.prepare(`
+    const hoursData = await db.prepare(`
       SELECT 
         CASE 
           WHEN started_at >= date('now', '-14 days') THEN 'recent'
@@ -179,7 +179,7 @@ async function assessPerformanceEffortMismatch(userId: string): Promise<BurnoutI
     `).all(userId) as Array<{ period: string; total_hours: number }>
     
     // Get performance trend
-    const perfData = db.prepare(`
+    const perfData = await db.prepare(`
       SELECT 
         CASE 
           WHEN assessment_date >= date('now', '-14 days') THEN 'recent'
@@ -192,7 +192,7 @@ async function assessPerformanceEffortMismatch(userId: string): Promise<BurnoutI
       GROUP BY period
     `).all(userId) as Array<{ period: string; avg_score: number }>
     
-    db.close()
+    // No need to close Supabase connection
     
     const recentHours = hoursData.find(d => d.period === 'recent')?.total_hours || 0
     const previousHours = hoursData.find(d => d.period === 'previous')?.total_hours || 0
@@ -250,13 +250,13 @@ async function assessPerformanceEffortMismatch(userId: string): Promise<BurnoutI
  */
 async function assessAvoidanceBehavior(userId: string): Promise<BurnoutIndicator> {
   try {
-    const { default: Database } = await import('better-sqlite3')
-    const path = await import('path')
-    const dbPath = path.default.join(process.cwd(), 'data', 'study-tracker.db')
-    const db = new Database(dbPath)
+    // Using Supabase PostgreSQL
+    // Path not needed for Supabase
+    // Database path not needed
+    const { db } = await import("@/lib/db-supabase")
     
     // Count sessions in recent vs previous period
-    const sessionCounts = db.prepare(`
+    const sessionCounts = await db.prepare(`
       SELECT 
         CASE 
           WHEN started_at >= date('now', '-7 days') THEN 'recent'
@@ -270,7 +270,7 @@ async function assessAvoidanceBehavior(userId: string): Promise<BurnoutIndicator
       GROUP BY period
     `).all(userId) as Array<{ period: string; session_count: number }>
     
-    db.close()
+    // No need to close Supabase connection
     
     const recentCount = sessionCounts.find(d => d.period === 'recent')?.session_count || 0
     const previousCount = sessionCounts.find(d => d.period === 'previous')?.session_count || 0
@@ -323,13 +323,13 @@ async function assessAvoidanceBehavior(userId: string): Promise<BurnoutIndicator
  */
 async function assessEmotionalIndicators(userId: string): Promise<BurnoutIndicator> {
   try {
-    const { default: Database } = await import('better-sqlite3')
-    const path = await import('path')
-    const dbPath = path.default.join(process.cwd(), 'data', 'study-tracker.db')
-    const db = new Database(dbPath)
+    // Using Supabase PostgreSQL
+    // Path not needed for Supabase
+    // Database path not needed
+    const { db } = await import("@/lib/db-supabase")
     
     // Check for negative language in recent session notes
-    const recentSessions = db.prepare(`
+    const recentSessions = await db.prepare(`
       SELECT session_notes, overall_notes
       FROM study_sessions
       WHERE user_id = ?
@@ -338,7 +338,7 @@ async function assessEmotionalIndicators(userId: string): Promise<BurnoutIndicat
       LIMIT 20
     `).all(userId) as Array<{ session_notes?: string; overall_notes?: string }>
     
-    db.close()
+    // No need to close Supabase connection
     
     const negativeKeywords = [
       'exhausted', 'tired', 'can\'t focus', 'giving up', 'frustrated',
@@ -390,12 +390,12 @@ async function assessEmotionalIndicators(userId: string): Promise<BurnoutIndicat
  */
 async function assessExtremeBehaviors(userId: string): Promise<BurnoutIndicator> {
   try {
-    const { default: Database } = await import('better-sqlite3')
-    const path = await import('path')
-    const dbPath = path.default.join(process.cwd(), 'data', 'study-tracker.db')
-    const db = new Database(dbPath)
+    // Using Supabase PostgreSQL
+    // Path not needed for Supabase
+    // Database path not needed
+    const { db } = await import("@/lib/db-supabase")
     
-    const behaviors = db.prepare(`
+    const behaviors = await db.prepare(`
       SELECT 
         COUNT(*) as total_sessions,
         SUM(CASE WHEN duration_minutes > 180 THEN 1 ELSE 0 END) as marathon_sessions,
@@ -412,7 +412,7 @@ async function assessExtremeBehaviors(userId: string): Promise<BurnoutIndicator>
       avg_weekly_hours: number
     } | undefined
     
-    db.close()
+    // No need to close Supabase connection
     
     if (!behaviors || behaviors.total_sessions === 0) {
       return {
@@ -547,32 +547,25 @@ async function storeBurnoutAssessment(
   recommendations: string[]
 ): Promise<void> {
   try {
-    const { default: Database } = await import('better-sqlite3')
-    const path = await import('path')
-    const fs = await import('fs')
-    const dbPath = path.default.join(process.cwd(), 'data', 'study-tracker.db')
+    // Using Supabase PostgreSQL
+    // Path not needed for Supabase
+    // Database path not needed
     
-    // Ensure data directory exists
-    const dbDir = path.default.dirname(dbPath)
-    if (!fs.default.existsSync(dbDir)) {
-      fs.default.mkdirSync(dbDir, { recursive: true })
-    }
+    const { db } = await import("@/lib/db-supabase")
     
-    const db = new Database(dbPath)
-    
-    const stmt = db.prepare(`
+    const stmt = await db.prepare(`
       INSERT INTO burnout_assessments (
         id, user_id, assessment_date,
         focus_decline_score, performance_effort_mismatch_score,
         avoidance_behavior_score, emotional_indicator_score,
         extreme_behavior_score, total_burnout_score, severity_level,
         indicators_detected, recommendations
-      ) VALUES (?, ?, datetime('now'), ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      ) VALUES (?, ?, NOW(), ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `)
     
     const id = Math.random().toString(36).substring(2, 15) + Date.now().toString(36)
     
-    stmt.run(
+    await stmt.run(
       id,
       userId,
       indicators.find(i => i.category === 'focus')?.score || 0,
@@ -586,7 +579,7 @@ async function storeBurnoutAssessment(
       JSON.stringify(recommendations)
     )
     
-    db.close()
+    // No need to close Supabase connection
   } catch (error) {
     console.error('Error storing burnout assessment:', error)
   }
@@ -597,12 +590,12 @@ async function storeBurnoutAssessment(
  */
 export async function getBurnoutHistory(userId: string, days: number = 30): Promise<BurnoutAssessment[]> {
   try {
-    const { default: Database } = await import('better-sqlite3')
-    const path = await import('path')
-    const dbPath = path.default.join(process.cwd(), 'data', 'study-tracker.db')
-    const db = new Database(dbPath)
+    // Using Supabase PostgreSQL
+    // Path not needed for Supabase
+    // Database path not needed
+    const { db } = await import("@/lib/db-supabase")
     
-    const rows = db.prepare(`
+    const rows = await db.prepare(`
       SELECT 
         user_id, assessment_date, total_burnout_score,
         severity_level, indicators_detected, recommendations
@@ -619,7 +612,7 @@ export async function getBurnoutHistory(userId: string, days: number = 30): Prom
       recommendations: string
     }>
     
-    db.close()
+    // No need to close Supabase connection
     
     return rows.map(row => ({
       userId: row.user_id,
@@ -635,3 +628,4 @@ export async function getBurnoutHistory(userId: string, days: number = 30): Prom
     return []
   }
 }
+

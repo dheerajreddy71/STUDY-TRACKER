@@ -129,7 +129,7 @@ export async function analyzeStudyDurationPerformance(
   `
   
   const params = subjectId ? [userId, subjectId] : [userId]
-  const rows = db.prepare(query).all(...params) as Array<{ duration: number; performance: number }>
+  const rows = await db.prepare(query).all(...params) as Array<{ duration: number; performance: number }>
   
   if (rows.length < 8) return null
   
@@ -188,7 +188,7 @@ export async function analyzeTimeOfDayPerformance(
   `
   
   const params = subjectId ? [userId, subjectId] : [userId]
-  const rows = db.prepare(query).all(...params) as Array<{ hour: number; performance: number }>
+  const rows = await db.prepare(query).all(...params) as Array<{ hour: number; performance: number }>
   
   // Group by time window
   const timeWindows = {
@@ -260,7 +260,7 @@ export async function analyzeStudyMethodPerformance(
   `
   
   const params = subjectId ? [userId, subjectId] : [userId]
-  const rows = db.prepare(query).all(...params) as Array<{ method: string; performance: number; focus: number }>
+  const rows = await db.prepare(query).all(...params) as Array<{ method: string; performance: number; focus: number }>
   
   // Group by method
   const methodGroups = new Map<string, Array<{ performance: number; focus: number }>>()
@@ -336,13 +336,13 @@ export async function storeCorrelationPattern(
   const { getDb, generateId } = await import('../db')
   const db = getDb()
   
-  const stmt = db.prepare(`
+  const stmt = await db.prepare(`
     INSERT INTO recommendation_patterns (
       id, user_id, subject_id, pattern_type, variable_x, variable_y,
       correlation_coefficient, p_value, sample_size, confidence_level,
       pattern_strength, pattern_description, recommendation_text,
       data_start_date, data_end_date, is_active
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, date('now', '-30 days'), date('now'), 1)
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, date('now', '-30 days'), CURRENT_DATE, 1)
   `)
   
   stmt.run(
@@ -387,7 +387,7 @@ export async function getActiveCorrelationPatterns(
   `
   
   const params = subjectId ? [userId, subjectId] : [userId]
-  const rows = db.prepare(query).all(...params) as any[]
+  const rows = await db.prepare(query).all(...params) as any[]
   
   return rows.map(row => ({
     variableX: row.variable_x,
@@ -401,3 +401,4 @@ export async function getActiveCorrelationPatterns(
     recommendation: row.recommendation_text
   }))
 }
+

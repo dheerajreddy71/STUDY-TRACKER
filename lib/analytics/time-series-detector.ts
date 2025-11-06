@@ -251,10 +251,10 @@ export async function analyzeFocusTrend(
   days: number = 30
 ): Promise<TimeSeriesTrend | null> {
   try {
-    const { default: Database } = await import('better-sqlite3')
-    const path = await import('path')
-    const dbPath = path.default.join(process.cwd(), 'data', 'study-tracker.db')
-    const db = new Database(dbPath)
+    // Using Supabase PostgreSQL
+    // Path not needed for Supabase
+    // Database path not needed
+    const { db } = await import("@/lib/db-supabase")
     
     const query = `
       SELECT date(started_at) as date, AVG(average_focus_score) as avg_focus
@@ -266,8 +266,8 @@ export async function analyzeFocusTrend(
       ORDER BY date(started_at)
     `
     
-    const rows = db.prepare(query).all(userId) as Array<{ date: string; avg_focus: number }>
-    db.close()
+    const rows = await db.prepare(query).all(userId) as Array<{ date: string; avg_focus: number }>
+    // No need to close Supabase connection
     
     if (rows.length < 14) return null
     
@@ -288,10 +288,10 @@ export async function analyzePerformanceTrend(
   days: number = 60
 ): Promise<TimeSeriesTrend | null> {
   try {
-    const { default: Database } = await import('better-sqlite3')
-    const path = await import('path')
-    const dbPath = path.default.join(process.cwd(), 'data', 'study-tracker.db')
-    const db = new Database(dbPath)
+    // Using Supabase PostgreSQL
+    // Path not needed for Supabase
+    // Database path not needed
+    const { db } = await import("@/lib/db-supabase")
     
     const query = `
       SELECT date(assessment_date) as date, AVG(percentage) as avg_score
@@ -304,8 +304,8 @@ export async function analyzePerformanceTrend(
     `
     
     const params = subjectId ? [userId, subjectId] : [userId]
-    const rows = db.prepare(query).all(...params) as Array<{ date: string; avg_score: number }>
-    db.close()
+    const rows = await db.prepare(query).all(...params) as Array<{ date: string; avg_score: number }>
+    // No need to close Supabase connection
     
     if (rows.length < 10) return null
     
@@ -325,10 +325,10 @@ export async function analyzeStudyHoursTrend(
   days: number = 30
 ): Promise<TimeSeriesTrend | null> {
   try {
-    const { default: Database } = await import('better-sqlite3')
-    const path = await import('path')
-    const dbPath = path.default.join(process.cwd(), 'data', 'study-tracker.db')
-    const db = new Database(dbPath)
+    // Using Supabase PostgreSQL
+    // Path not needed for Supabase
+    // Database path not needed
+    const { db } = await import("@/lib/db-supabase")
     
     const query = `
       SELECT 
@@ -341,8 +341,8 @@ export async function analyzeStudyHoursTrend(
       ORDER BY date(started_at)
     `
     
-    const rows = db.prepare(query).all(userId) as Array<{ date: string; total_hours: number }>
-    db.close()
+    const rows = await db.prepare(query).all(userId) as Array<{ date: string; total_hours: number }>
+    // No need to close Supabase connection
     
     if (rows.length < 14) return null
     
@@ -362,10 +362,10 @@ export async function detectWeeklyPerformancePattern(
   days: number = 60
 ): Promise<SeasonalPattern | null> {
   try {
-    const { default: Database } = await import('better-sqlite3')
-    const path = await import('path')
-    const dbPath = path.default.join(process.cwd(), 'data', 'study-tracker.db')
-    const db = new Database(dbPath)
+    // Using Supabase PostgreSQL
+    // Path not needed for Supabase
+    // Database path not needed
+    const { db } = await import("@/lib/db-supabase")
     
     const query = `
       SELECT 
@@ -378,8 +378,8 @@ export async function detectWeeklyPerformancePattern(
       ORDER BY started_at
     `
     
-    const rows = db.prepare(query).all(userId) as Array<{ day_of_week: number; focus: number }>
-    db.close()
+    const rows = await db.prepare(query).all(userId) as Array<{ day_of_week: number; focus: number }>
+    // No need to close Supabase connection
     
     // Group by day of week
     const dataByDay = new Map<number, number[]>()
@@ -457,3 +457,4 @@ export async function getComprehensiveTimeSeriesAnalysis(userId: string): Promis
     anomalies: [] // Can be extended with anomaly detection
   }
 }
+

@@ -182,31 +182,21 @@ async function storeRecommendations(
   subjectId?: string
 ): Promise<void> {
   try {
-    const { default: Database } = await import('better-sqlite3')
-    const path = await import('path')
-    const fs = await import('fs')
-    const dbPath = path.default.join(process.cwd(), 'data', 'study-tracker.db')
+    // Using Supabase PostgreSQL
+    const { db } = await import('@/lib/db-supabase')
     
-    // Ensure data directory exists
-    const dbDir = path.default.dirname(dbPath)
-    if (!fs.default.existsSync(dbDir)) {
-      fs.default.mkdirSync(dbDir, { recursive: true })
-    }
-    
-    const db = new Database(dbPath)
-    
-    const stmt = db.prepare(`
+    const stmt = await db.prepare(`
       INSERT INTO recommendations (
         id, user_id, subject_id, recommendation_type, priority,
         title, description, rationale, expected_outcome, confidence_level,
         source_modules, status, is_active, created_at
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending', 1, datetime('now'))
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending', true, NOW())
     `)
     
     for (const rec of recommendations) {
       const id = Math.random().toString(36).substring(2, 15) + Date.now().toString(36)
       
-      stmt.run(
+      await stmt.run(
         id,
         userId,
         subjectId || null,
@@ -221,7 +211,7 @@ async function storeRecommendations(
       )
     }
     
-    db.close()
+    // No need to close Supabase connection
   } catch (error) {
     console.error('Error storing recommendations:', error)
   }

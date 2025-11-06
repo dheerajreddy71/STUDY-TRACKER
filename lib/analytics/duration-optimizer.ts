@@ -32,10 +32,10 @@ export async function analyzeOptimalDuration(
   subjectId?: string
 ): Promise<DurationAnalysis | null> {
   try {
-    const { default: Database } = await import('better-sqlite3')
-    const path = await import('path')
-    const dbPath = path.default.join(process.cwd(), 'data', 'study-tracker.db')
-    const db = new Database(dbPath)
+    // Using Supabase PostgreSQL
+    // Path not needed for Supabase
+    // Database path not needed
+    const { db } = await import("@/lib/db-supabase")
     
     // Get sessions with performance data
     const query = `
@@ -57,12 +57,12 @@ export async function analyzeOptimalDuration(
     `
     
     const params = subjectId ? [userId, subjectId] : [userId]
-    const rows = db.prepare(query).all(...params) as Array<{
+    const rows = await db.prepare(query).all(...params) as Array<{
       duration_minutes: number
       average_focus_score: number
       performance: number
     }>
-    db.close()
+    // No need to close Supabase connection
     
     if (rows.length < 10) return null
     
@@ -307,16 +307,16 @@ export async function getDurationRecommendationsForAllSubjects(
   userId: string
 ): Promise<Map<string, DurationAnalysis>> {
   try {
-    const { default: Database } = await import('better-sqlite3')
-    const path = await import('path')
-    const dbPath = path.default.join(process.cwd(), 'data', 'study-tracker.db')
-    const db = new Database(dbPath)
+    // Using Supabase PostgreSQL
+    // Path not needed for Supabase
+    // Database path not needed
+    const { db } = await import("@/lib/db-supabase")
     
     // Get all subjects for user
-    const subjects = db.prepare(`
+    const subjects = await db.prepare(`
       SELECT id FROM subjects WHERE user_id = ? AND is_active = 1
     `).all(userId) as Array<{ id: string }>
-    db.close()
+    // No need to close Supabase connection
     
     const recommendations = new Map<string, DurationAnalysis>()
     
@@ -349,3 +349,4 @@ export async function getQuickDurationRecommendation(
   
   return analysis.recommendation
 }
+

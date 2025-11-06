@@ -35,16 +35,16 @@ async function calculateAttentionNeed(
   subjectId: string,
   subjectData: any
 ): Promise<{ score: number; reasons: string[] }> {
-  const { default: Database } = await import('better-sqlite3')
-  const path = await import('path')
-  const dbPath = path.default.join(process.cwd(), 'data', 'study-tracker.db')
-  const db = new Database(dbPath)
+  // Using Supabase PostgreSQL
+  // Path not needed for Supabase
+  // Database path not needed
+  const { db } = await import("@/lib/db-supabase")
   
   let score = 0
   const reasons: string[] = []
   
   // Factor 1: Days since last studied (max 20 points)
-  const lastSession = db.prepare(`
+  const lastSession = await db.prepare(`
     SELECT MAX(started_at) as last_studied
     FROM study_sessions
     WHERE user_id = ? AND subject_id = ?
@@ -121,7 +121,7 @@ async function calculateAttentionNeed(
   }
   
   // Factor 5: Forgetting risk from spaced repetition (max 10 points)
-  const topicsAtRisk = db.prepare(`
+  const topicsAtRisk = await db.prepare(`
     SELECT COUNT(*) as count
     FROM spaced_repetition_items
     WHERE user_id = ? AND subject_id = ? AND status = 'active'
@@ -136,7 +136,7 @@ async function calculateAttentionNeed(
     reasons.push(`${topicsAtRisk.count} topics need review`)
   }
   
-  db.close()
+  // No need to close Supabase connection
   
   return {
     score: Math.min(100, Math.max(0, score)),
@@ -151,20 +151,20 @@ export async function generateAllocationPlan(
   userId: string,
   availableHoursPerWeek: number = 20
 ): Promise<AllocationPlan> {
-  const { default: Database } = await import('better-sqlite3')
-  const path = await import('path')
-  const dbPath = path.default.join(process.cwd(), 'data', 'study-tracker.db')
-  const db = new Database(dbPath)
+  // Using Supabase PostgreSQL
+  // Path not needed for Supabase
+  // Database path not needed
+  const { db } = await import("@/lib/db-supabase")
   
   // Get all active subjects
-  const subjects = db.prepare(`
+  const subjects = await db.prepare(`
     SELECT * FROM subjects
     WHERE user_id = ? AND is_active = 1
     ORDER BY priority_level DESC
   `).all(userId) as any[]
   
   // Get current week's study hours per subject
-  const currentHours = db.prepare(`
+  const currentHours = await db.prepare(`
     SELECT 
       subject_id,
       SUM(duration_minutes) / 60.0 as hours
@@ -174,7 +174,7 @@ export async function generateAllocationPlan(
     GROUP BY subject_id
   `).all(userId) as Array<{ subject_id: string; hours: number }>
   
-  db.close()
+  // No need to close Supabase connection
   
   const currentHoursMap = new Map(currentHours.map(h => [h.subject_id, h.hours]))
   
@@ -320,10 +320,10 @@ export async function getNeglectedSubjects(
   daysSinceLastStudy: number
   recommendation: string
 }>> {
-  const { default: Database } = await import('better-sqlite3')
-  const path = await import('path')
-  const dbPath = path.default.join(process.cwd(), 'data', 'study-tracker.db')
-  const db = new Database(dbPath)
+  // Using Supabase PostgreSQL
+  // Path not needed for Supabase
+  // Database path not needed
+  const { db } = await import("@/lib/db-supabase")
   
   const query = `
     SELECT 
@@ -339,13 +339,13 @@ export async function getNeglectedSubjects(
     ORDER BY last_studied ASC NULLS FIRST
   `
   
-  const rows = db.prepare(query).all(userId, daysThreshold) as Array<{
+  const rows = await db.prepare(query).all(userId, daysThreshold) as Array<{
     id: string
     name: string
     last_studied: string | null
   }>
   
-  db.close()
+  // No need to close Supabase connection
   
   return rows.map(row => {
     const daysSince = row.last_studied
@@ -394,3 +394,4 @@ export function balanceCognitiveLoad(
   
   return balanced
 }
+

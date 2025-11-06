@@ -119,13 +119,13 @@ async function analyzeMethodPreferences(userId: string): Promise<{
   kinesthetic: number
   reading_writing: number
 }> {
-  const { default: Database } = await import('better-sqlite3')
-  const path = await import('path')
-  const dbPath = path.default.join(process.cwd(), 'data', 'study-tracker.db')
-  const db = new Database(dbPath)
+  // Using Supabase PostgreSQL
+  // Path not needed for Supabase
+  // Database path not needed
+  const { db } = await import("@/lib/db-supabase")
   
   // Get study sessions with methods
-  const sessions = db.prepare(`
+  const sessions = await db.prepare(`
     SELECT 
       study_method,
       focus_rating,
@@ -142,7 +142,7 @@ async function analyzeMethodPreferences(userId: string): Promise<{
   }>
   
   // Get performance linked to methods
-  const methodPerformance = db.prepare(`
+  const methodPerformance = await db.prepare(`
     SELECT 
       ss.study_method,
       AVG(pe.percentage) as avg_performance,
@@ -158,7 +158,7 @@ async function analyzeMethodPreferences(userId: string): Promise<{
     count: number
   }>
   
-  db.close()
+  // No need to close Supabase connection
   
   const scores = {
     visual: 0,
@@ -226,12 +226,12 @@ async function analyzeConcentrationPattern(userId: string): Promise<{
   pattern: 'sprint' | 'marathon' | 'steady'
   optimalDuration: number
 }> {
-  const { default: Database } = await import('better-sqlite3')
-  const path = await import('path')
-  const dbPath = path.default.join(process.cwd(), 'data', 'study-tracker.db')
-  const db = new Database(dbPath)
+  // Using Supabase PostgreSQL
+  // Path not needed for Supabase
+  // Database path not needed
+  const { db } = await import("@/lib/db-supabase")
   
-  const sessions = db.prepare(`
+  const sessions = await db.prepare(`
     SELECT 
       duration_minutes,
       focus_rating,
@@ -246,7 +246,7 @@ async function analyzeConcentrationPattern(userId: string): Promise<{
     breaks_taken: number
   }>
   
-  db.close()
+  // No need to close Supabase connection
   
   if (sessions.length < 5) {
     return { pattern: 'steady', optimalDuration: 45 }
@@ -283,12 +283,12 @@ async function analyzeConcentrationPattern(userId: string): Promise<{
  * Analyze best time of day for studying
  */
 async function analyzeBestTimeOfDay(userId: string): Promise<'morning' | 'afternoon' | 'evening' | 'night'> {
-  const { default: Database } = await import('better-sqlite3')
-  const path = await import('path')
-  const dbPath = path.default.join(process.cwd(), 'data', 'study-tracker.db')
-  const db = new Database(dbPath)
+  // Using Supabase PostgreSQL
+  // Path not needed for Supabase
+  // Database path not needed
+  const { db } = await import("@/lib/db-supabase")
   
-  const sessions = db.prepare(`
+  const sessions = await db.prepare(`
     SELECT 
       strftime('%H', started_at) as hour,
       focus_rating,
@@ -302,7 +302,7 @@ async function analyzeBestTimeOfDay(userId: string): Promise<'morning' | 'aftern
     count: number
   }>
   
-  db.close()
+  // No need to close Supabase connection
   
   if (sessions.length === 0) {
     return 'morning'
@@ -392,18 +392,18 @@ export async function generateLearningProfile(userId: string): Promise<LearningP
   recommendations.push(`Schedule important study sessions in the ${bestTime} when your focus peaks`)
   
   // Calculate confidence based on data volume
-  const { default: Database } = await import('better-sqlite3')
-  const path = await import('path')
-  const dbPath = path.default.join(process.cwd(), 'data', 'study-tracker.db')
-  const db = new Database(dbPath)
+  // Using Supabase PostgreSQL
+  // Path not needed for Supabase
+  // Database path not needed
+  const { db } = await import("@/lib/db-supabase")
   
-  const sessionCount = db.prepare(`
+  const sessionCount = await db.prepare(`
     SELECT COUNT(*) as count
     FROM study_sessions
     WHERE user_id = ? AND focus_rating IS NOT NULL
   `).get(userId) as { count: number }
   
-  db.close()
+  // No need to close Supabase connection
   
   const confidence = Math.min(100, (sessionCount.count / 20) * 100)
   
@@ -431,18 +431,18 @@ export async function generateLearningProfile(userId: string): Promise<LearningP
  * Store learning profile in database
  */
 async function storeLearningProfile(profile: LearningProfile): Promise<void> {
-  const { default: Database } = await import('better-sqlite3')
-  const path = await import('path')
-  const dbPath = path.default.join(process.cwd(), 'data', 'study-tracker.db')
-  const db = new Database(dbPath)
+  // Using Supabase PostgreSQL
+  // Path not needed for Supabase
+  // Database path not needed
+  const { db } = await import("@/lib/db-supabase")
   
-  const stmt = db.prepare(`
+  const stmt = await db.prepare(`
     INSERT OR REPLACE INTO learning_profiles (
       id, user_id, dominant_style, style_scores,
       preferred_methods, optimal_duration, best_time_of_day,
       concentration_pattern, confidence_score,
       recommendations, updated_at
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'))
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NOW())
   `)
   
   stmt.run(
@@ -458,26 +458,26 @@ async function storeLearningProfile(profile: LearningProfile): Promise<void> {
     JSON.stringify(profile.recommendations)
   )
   
-  db.close()
+  // No need to close Supabase connection
 }
 
 /**
  * Get existing learning profile
  */
 export async function getLearningProfile(userId: string): Promise<LearningProfile | null> {
-  const { default: Database } = await import('better-sqlite3')
-  const path = await import('path')
-  const dbPath = path.default.join(process.cwd(), 'data', 'study-tracker.db')
-  const db = new Database(dbPath)
+  // Using Supabase PostgreSQL
+  // Path not needed for Supabase
+  // Database path not needed
+  const { db } = await import("@/lib/db-supabase")
   
-  const row = db.prepare(`
+  const row = await db.prepare(`
     SELECT * FROM learning_profiles
     WHERE user_id = ?
     ORDER BY updated_at DESC
     LIMIT 1
   `).get(userId) as any
   
-  db.close()
+  // No need to close Supabase connection
   
   if (!row) return null
   
@@ -561,3 +561,4 @@ export function getMethodRecommendations(profile: LearningProfile): Array<{
   
   return recommendations
 }
+
