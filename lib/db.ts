@@ -82,20 +82,18 @@ export const database: any = {
   }) {
     const database = getDb()
     const id = generateId()
+    // Only insert core fields that exist in the schema
     const stmt = database.prepare(`
-      INSERT INTO users (id, email, name, education_level, primary_goal, study_style, energy_level, current_challenges, is_guest)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+      INSERT INTO users (id, email, full_name, academic_level, learning_style, is_guest)
+      VALUES (?, ?, ?, ?, ?, ?)
     `)
     await stmt.run(
       id,
       user.email,
-      user.name,
-      user.educationLevel,
-      user.primaryGoal,
-      user.studyStyle,
-      user.energyLevel,
-      JSON.stringify(user.currentChallenges),
-      user.isGuest ? 1 : 0,
+      user.name || user.email.split('@')[0], // Use email username if name not provided
+      user.educationLevel || 'other',
+      user.studyStyle || 'multimodal',
+      user.isGuest ? true : false,
     )
     return await database.prepare("SELECT * FROM users WHERE id = ?").get(id)
   },
