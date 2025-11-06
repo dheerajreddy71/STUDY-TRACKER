@@ -1,6 +1,6 @@
 /**
- * Supabase PostgreSQL Database Client
- * Handles raw SQL queries for production and development
+ * Neon PostgreSQL Database Client
+ * Serverless PostgreSQL optimized for Vercel and edge deployments
  */
 
 import { Pool, QueryResult } from 'pg'
@@ -13,15 +13,15 @@ export function getPool(): Pool {
     const connectionString = process.env.DATABASE_URL
     
     if (!connectionString) {
-      throw new Error('DATABASE_URL environment variable is not set. Please configure Supabase connection.')
+      throw new Error('DATABASE_URL environment variable is not set. Please configure Neon connection.')
     }
     
     pool = new Pool({
       connectionString,
-      ssl: process.env.NODE_ENV === 'production' ? { rejectUnauthorized: false } : false,
-      max: 20, // Maximum number of clients in pool
+      // Neon handles SSL automatically via connection string
+      max: 10, // Neon recommends smaller pool for serverless
       idleTimeoutMillis: 30000,
-      connectionTimeoutMillis: 2000,
+      connectionTimeoutMillis: 5000, // Increased for serverless cold starts
     })
     
     pool.on('error', (err) => {
